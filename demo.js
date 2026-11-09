@@ -1,0 +1,381 @@
+/* =========================================================
+   Dinedot — built-in demo. Runs the same functions as the database, in this browser only,
+   so a restaurant can try the guest page and the staff app side by side before setup.
+   Data is kept in localStorage ("dd.demo") and shared between tabs of the same browser.
+   When no staff tab is open, a pretend kitchen moves orders along by itself.
+   ========================================================= */
+const Demo = (() => {
+  const KEY = "dd.demo.v1", HB = "dd.demo.hb", WHO = "dd.demo.user";
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "d" + Math.random().toString(36).slice(2) + Date.now().toString(36));
+  const now = () => new Date().toISOString();
+  const ago = s => new Date(Date.now() - s * 1000).toISOString();
+  const err = m => { const e = new Error(m); throw e; };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const dayKey = d => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
+
+  const TEAM = [
+    { id: "u-owner", name: "Meera", email: "owner@demo", role: "owner" },
+    { id: "u-manager", name: "Sana", email: "manager@demo", role: "manager" },
+    { id: "u-waiter", name: "Ravi", email: "waiter@demo", role: "waiter" },
+    { id: "u-kitchen", name: "Chef Imran", email: "kitchen@demo", role: "kitchen" }
+  ];
+
+  /* ---------- seed ---------- */
+  function seed(){
+    let r = 7; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    const cats = ["Starters", "Mains", "Breads & Rice", "Drinks", "Desserts"].map((n, i) => ({ id: "c" + (i + 1), name: n, sort: i + 1, active: true }));
+    const I = (c, name, description, price, diet, spice, allergens, sizes, addons, best) =>
+      ({ id: uid(), category_id: c, name, description, price, diet, spice, allergens, sizes: sizes || [], addons: addons || [], photo_url: "",
+         bestseller: !!best, available: true, sort: 0, created_at: now() });
+    const items = [
+      I("c1", "Paneer Tikka", "Charred cottage cheese, peppers and onion, mint chutney", 290, "veg", 2, ["Dairy"], [], [{ name: "Extra chutney", price: 20 }], true),
+      I("c1", "Chicken Seekh Kebab", "Minced chicken, ginger and green chilli, off the grill", 340, "nonveg", 3, [], [], []),
+      I("c1", "Crispy Corn", "Sweetcorn tossed with pepper, garlic and spring onion", 220, "veg", 1, [], [], []),
+      I("c1", "Tandoori Prawns", "Ajwain-marinated prawns, lemon and onion rings", 520, "nonveg", 2, ["Shellfish", "Dairy"], [], []),
+      I("c2", "Chicken Karahi", "Slow-cooked with tomato, ginger and green chilli", 420, "nonveg", 3, ["Dairy"], [{ name: "Half", price: 260 }, { name: "Full", price: 420 }], [], true),
+      I("c2", "Dal Makhani", "Black lentils simmered overnight with butter and cream", 280, "veg", 1, ["Dairy"], [], [{ name: "Extra butter", price: 30 }], true),
+      I("c2", "Egg Curry", "Boiled eggs in onion-tomato masala", 240, "egg", 2, [], [], []),
+      I("c2", "Paneer Butter Masala", "Soft paneer in a mild, creamy tomato gravy", 320, "veg", 1, ["Dairy", "Nuts"], [{ name: "Half", price: 200 }, { name: "Full", price: 320 }], []),
+      I("c2", "Mutton Rogan Josh", "Kashmiri chilli, fennel and slow-cooked mutton", 480, "nonveg", 4, [], [], []),
+      I("c3", "Butter Naan", "Tandoor-baked, brushed with butter", 60, "veg", null, ["Gluten", "Dairy"], [], [{ name: "Garlic", price: 15 }, { name: "Cheese", price: 40 }]),
+      I("c3", "Tandoori Roti", "Whole-wheat, from the clay oven", 30, "veg", null, ["Gluten"], [], []),
+      I("c3", "Jeera Rice", "Basmati with cumin and ghee", 180, "veg", null, ["Dairy"], [], []),
+      I("c3", "Chicken Biryani", "Dum-cooked basmati, saffron, fried onion, raita", 380, "nonveg", 2, ["Dairy"], [], [{ name: "Extra raita", price: 40 }], true),
+      I("c4", "Mint Lemonade", "Fresh lime, mint and soda", 120, "veg", null, [], [{ name: "Glass", price: 120 }, { name: "Jug", price: 320 }], []),
+      I("c4", "Masala Chaas", "Spiced buttermilk", 90, "veg", null, ["Dairy"], [], []),
+      I("c4", "Cutting Chai", "Strong, sweet, ginger and cardamom", 40, "veg", null, ["Dairy"], [], []),
+      I("c5", "Gulab Jamun", "Two warm dumplings in rose syrup", 140, "veg", null, ["Dairy", "Gluten", "Nuts"], [], [{ name: "Vanilla scoop", price: 60 }]),
+      I("c5", "Kulfi Falooda", "Malai kulfi, vermicelli, basil seeds, rose", 180, "veg", null, ["Dairy", "Nuts"], [], [])
+    ];
+    items.forEach((x, i) => x.sort = i + 1);
+    items.find(x => x.name === "Tandoori Prawns").available = false;
+    const tables = ["T1","T2","T3","T4","T5","T6","T7","T8"].map((c, i) => ({ id: "t" + (i + 1), code: c, name: "", area: i < 6 ? "Main" : "Terrace",
+      seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c }));
+    const settings = { restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
+      accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
+      wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
+      gst_pct: 5, service_pct: 0, tip_options: [0, 5, 10], pay_cash: true, pay_card: true, pay_upi: true,
+      google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", updated_at: now() };
+    const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], no: 100,
+      staff: TEAM.map(t => Object.assign({ phone: "", active: true, created_at: ago(86400 * 60) }, t)) };
+
+    // 21 days of history for the dashboard
+    const comments = ["Lovely karahi!", "Quick service, will come back", "Naan was a bit cold", "Best dal in the area", "", "", "Great biryani", "Loved the QR ordering"];
+    for (let d = 21; d >= 0; d--) {
+      const base = new Date(); base.setHours(0, 0, 0, 0); base.setDate(base.getDate() - d);
+      const count = d === 0 ? 9 : 14 + Math.floor(rnd() * 16);
+      for (let k = 0; k < count; k++) {
+        const hour = pick([12, 13, 13, 14, 15, 19, 20, 20, 21, 21, 22]);
+        const open = new Date(base.getTime() + hour * 3600e3 + Math.floor(rnd() * 3400) * 1000);
+        if (open > new Date(Date.now() - 3600e3)) continue;
+        const t = pick(tables), guests = 1 + Math.floor(rnd() * 5);
+        const v = { id: uid(), table_id: t.id, opened_at: open.toISOString(), status: "paid", guests, split: 1, tip_pct: pick([0, 0, 5, 10]),
+          pay_choice: "", bill_at: null, paid_at: new Date(open.getTime() + (35 + rnd() * 50) * 60e3).toISOString(), paid_method: pick(["upi", "upi", "upi", "cash", "card"]),
+          paid_by: "u-waiter", void_reason: "" };
+        const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: t.id, source: "guest", created_by: null, status: "served", note: "",
+          created_at: open.toISOString(), started_at: new Date(open.getTime() + 90e3).toISOString(),
+          ready_at: new Date(open.getTime() + (9 + rnd() * 14) * 60e3).toISOString(), served_at: new Date(open.getTime() + 20 * 60e3).toISOString(), cancel_reason: "", items: [] };
+        const n = 2 + Math.floor(rnd() * 4);
+        for (let j = 0; j < n; j++) { const it = pick(items.filter(x => x.name !== "Tandoori Prawns")); const size = it.sizes.length ? pick(it.sizes) : null;
+          const qty = it.category_id === "c3" ? 1 + Math.floor(rnd() * 4) : 1; const unit = size ? size.price : it.price;
+          o.items.push({ item_id: it.id, name: it.name, size: size ? size.name : "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "" }); }
+        db.visits.push(v); db.orders.push(o);
+        Object.assign(v, freeze(db, v));
+        if (rnd() < .35) db.reviews.push({ id: uid(), visit_id: v.id, table_id: t.id, stars: pick([5, 5, 5, 4, 4, 3]), comment: pick(comments), created_at: v.paid_at });
+      }
+    }
+    // A few tables busy right now
+    const live = (code, mins, lines, status, extra) => {
+      const t = tables.find(x => x.code === code);
+      const v = Object.assign({ id: uid(), table_id: t.id, opened_at: ago(mins * 60), status: "open", guests: 2, split: 1, tip_pct: 0, pay_choice: "",
+        bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }, extra || {});
+      db.visits.push(v);
+      const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: t.id, source: "guest", created_by: null, status, note: "",
+        created_at: ago(mins * 60), started_at: status !== "new" ? ago(mins * 60 - 60) : null, ready_at: ["ready", "served"].includes(status) ? ago(60) : null,
+        served_at: status === "served" ? ago(30) : null, cancel_reason: "", items: [] };
+      lines.forEach(([name, qty, size]) => { const it = items.find(x => x.name === name); const unit = size ? it.sizes.find(s => s.name === size).price : it.price;
+        o.items.push({ item_id: it.id, name, size: size || "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "" }); });
+      db.orders.push(o); return v;
+    };
+    live("T1", 6, [["Paneer Tikka", 1], ["Mint Lemonade", 2, "Glass"]], "new");
+    live("T2", 14, [["Chicken Karahi", 1, "Full"], ["Butter Naan", 4]], "cooking", { guests: 3 });
+    const v6 = live("T6", 31, [["Chicken Biryani", 2], ["Masala Chaas", 2]], "ready", { guests: 2 });
+    db.calls.push({ id: uid(), table_id: "t6", visit_id: v6.id, kind: "water", created_at: ago(70), seen_at: null, seen_by: null, done_at: null });
+    live("T4", 52, [["Dal Makhani", 1], ["Paneer Butter Masala", 1, "Full"], ["Jeera Rice", 1], ["Butter Naan", 3]], "served",
+      { guests: 4, status: "bill", bill_at: ago(90), split: 2, tip_pct: 10, pay_choice: "upi" });
+    const v4 = db.visits.find(v => v.status === "bill");
+    db.calls.push({ id: uid(), table_id: v4.table_id, visit_id: v4.id, kind: "bill", created_at: ago(90), seen_at: null, seen_by: null, done_at: null });
+    db.born = now();   // the pretend kitchen leaves the seeded tables alone
+    return db;
+  }
+
+  /* ---------- storage ---------- */
+  let db = null;   // created on first use, so a real (Supabase) setup never seeds anything
+  function save(){ store.set(KEY, db); }
+  function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); } }
+
+  /* ---------- helpers (mirror the SQL) ---------- */
+  const tableBy = token => { const t = db.tables.find(x => x.token === token && x.active); if (!t) err("This QR code isn't active. Please ask a waiter."); return t; };
+  const openVisit = tid => db.visits.find(v => v.table_id === tid && (v.status === "open" || v.status === "bill"));
+  const orderJson = o => ({ id: o.id, no: o.no, status: o.status, source: o.source, note: o.note, created_at: o.created_at, started_at: o.started_at,
+    ready_at: o.ready_at, served_at: o.served_at, cancel_reason: o.cancel_reason,
+    items: o.items.map(i => ({ name: i.name, size: i.size, addons: i.addons, qty: i.qty, diet: i.diet, note: i.note, amount: i.line_total })) });
+  function linesOf(d, vid){
+    const g = new Map();
+    d.orders.filter(o => o.visit_id === vid && o.status !== "cancelled").sort((a, b) => a.created_at < b.created_at ? -1 : 1).forEach(o => o.items.forEach(i => {
+      const k = i.name + "|" + i.size + "|" + i.addons.join(","); const x = g.get(k) || { name: i.name, size: i.size, addons: i.addons, qty: 0, amount: 0 };
+      x.qty += i.qty; x.amount += i.line_total; g.set(k, x); }));
+    return [...g.values()];
+  }
+  function freeze(d, v){ const b = Money.bill(linesOf(d, v.id), d.settings, v.tip_pct, v.split);
+    return { subtotal: b.subtotal, service: b.service, gst: b.gst, tip: b.tip, total: b.grand }; }
+  function bill(vid){
+    const v = db.visits.find(x => x.id === vid); if (!v) return null;
+    const lines = linesOf(db, vid);
+    if (v.status === "paid") return { lines, subtotal: v.subtotal, service: v.service, gst: v.gst, tip: v.tip, total: v.total - v.tip, grand: v.total,
+      split: v.split, each: Math.ceil(v.total / v.split), tip_pct: v.tip_pct, service_pct: db.settings.service_pct, gst_pct: db.settings.gst_pct };
+    return Money.bill(lines, db.settings, v.tip_pct, v.split);
+  }
+  function priceCart(items){
+    if (!Array.isArray(items) || !items.length) err("Your order is empty.");
+    let count = 0;
+    return items.map(it => {
+      const m = db.items.find(x => x.id === it.id); const c = m && db.categories.find(x => x.id === m.category_id);
+      if (!m || !c || !c.active) err("A dish in your order is no longer on the menu. Please refresh.");
+      if (!m.available) err(m.name + " is sold out right now.");
+      const qty = +it.qty || 1; if (qty < 1 || qty > 50) err("Check the quantity for " + m.name + ".");
+      count += qty;
+      let unit = m.price, size = "";
+      if (m.sizes.length) { const s = m.sizes.find(x => x.name === it.size); if (!s) err("Pick a size for " + m.name + "."); unit = s.price; size = s.name; }
+      const addons = [...new Set(it.addons || [])];
+      addons.forEach(a => { const x = m.addons.find(y => y.name === a); if (!x) err("An extra for " + m.name + " is no longer offered. Please refresh."); unit += x.price; });
+      return { item_id: m.id, name: m.name, size, addons, diet: m.diet, qty, unit_price: unit, line_total: unit * qty, note: String(it.note || "").slice(0, 200) };
+    }).filter(() => { if (count > 60) err("That's a lot of dishes. Please ask a waiter."); return true; });
+  }
+  function addOrder(tid, items, note, guests, source){
+    const lines = priceCart(items);
+    let v = openVisit(tid);
+    if (!v) { v = { id: uid(), table_id: tid, opened_at: now(), status: "open", guests: guests >= 1 ? guests : null, split: 1, tip_pct: 0, pay_choice: "",
+      bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }; db.visits.push(v); }
+    else {
+      if (source === "guest" && db.orders.some(o => o.visit_id === v.id && o.source === "guest" && Date.now() - new Date(o.created_at) < 15e3))
+        err("Your last order was just sent. Please wait a few seconds before ordering again.");
+      v.status = "open"; if (!v.guests && guests >= 1) v.guests = guests;
+    }
+    const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: tid, source, created_by: source === "staff" ? me().id : null, status: "new",
+      note: String(note || "").slice(0, 300), created_at: now(), started_at: null, ready_at: null, served_at: null, cancel_reason: "", items: lines };
+    db.orders.push(o); save();
+    return { order: orderJson(o), visit_id: v.id };
+  }
+  const me = () => { const u = store.get(WHO); return u ? db.staff.find(s => s.id === u && s.active) : null; };
+  const role = () => (me() || {}).role;
+  const need = ok => { if (!ok) err("You don't have access to this."); };
+  const isManager = () => ["owner", "manager"].includes(role());
+  const isFloor = () => ["owner", "manager", "waiter"].includes(role());
+  const log = (action, detail) => { const m = me() || {}; db.activity.unshift({ id: db.activity.length + 1, at: now(), by_id: m.id, by_name: m.name || "", action, detail: detail || "" }); db.activity = db.activity.slice(0, 300); };
+  const inRange = (iso, from, to) => { const k = dayKey(iso); return k >= from && k <= to; };
+
+  /* ---------- pretend kitchen when no staff tab is open ---------- */
+  function bot(){
+    const hb = +localStorage.getItem(HB) || 0;
+    if (Date.now() - hb < 20e3) return;
+    let changed = false; const t = Date.now(), born = db.born || "";
+    db.orders.forEach(o => { if (o.created_at < born) return;
+      const age = s => t - new Date(s).getTime();
+      if (o.status === "new" && age(o.created_at) > 8e3) { o.status = "cooking"; o.started_at = now(); changed = true; }
+      else if (o.status === "cooking" && age(o.started_at) > 35e3) { o.status = "ready"; o.ready_at = now(); changed = true; }
+      else if (o.status === "ready" && age(o.ready_at) > 20e3) { o.status = "served"; o.served_at = now(); changed = true; }
+    });
+    db.calls.forEach(c => { if (!c.done_at && c.created_at >= born) { const a = t - new Date(c.created_at); if (!c.seen_at && a > 6e3) { c.seen_at = now(); c.seen_by = "u-waiter"; changed = true; }
+      if (a > 40e3 && c.kind !== "bill") { c.done_at = now(); changed = true; } } });
+    db.visits.forEach(v => { if (v.status === "bill" && v.bill_at >= born && t - new Date(v.bill_at) > 45e3 && !db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) {
+      db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = now(); });
+      Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: v.pay_choice || "upi", paid_by: "u-waiter" });
+      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); }); changed = true; } });
+    if (changed) save();
+  }
+
+  /* ---------- the functions ---------- */
+  const F = {
+    guest_menu({ p_token }){ const t = tableBy(p_token), s = db.settings;
+      return { table: { code: t.code, name: t.name || "Table " + t.code },
+        place: { name: s.restaurant_name, tagline: s.tagline, currency: s.currency, accent: s.accent, accepting: s.accepting_orders, closed_message: s.closed_message,
+          welcome: s.welcome_note, gst_pct: s.gst_pct, service_pct: s.service_pct, tips: s.tip_options,
+          pay: { upi: s.pay_upi && !!s.upi_id, cash: s.pay_cash, card: s.pay_card }, has_wifi: !!s.wifi_name, review_url: s.google_review_url },
+        categories: db.categories.filter(c => c.active && db.items.some(i => i.category_id === c.id)).sort((a, b) => a.sort - b.sort).map(c => ({ id: c.id, name: c.name })),
+        items: db.items.filter(i => (db.categories.find(c => c.id === i.category_id) || {}).active).sort((a, b) => a.sort - b.sort)
+          .map(i => ({ id: i.id, cat: i.category_id, name: i.name, desc: i.description, price: i.price, diet: i.diet, spice: i.spice, allergens: i.allergens,
+            sizes: i.sizes, addons: i.addons, photo: i.photo_url, best: i.bestseller, available: i.available })) }; },
+    guest_state({ p_token }){ bot(); const t = tableBy(p_token), s = db.settings, v = openVisit(t.id);
+      if (!v) { const lp = db.visits.filter(x => x.table_id === t.id && x.status === "paid" && Date.now() - new Date(x.paid_at) < 2 * 3600e3)
+          .sort((a, b) => a.paid_at < b.paid_at ? 1 : -1)[0];
+        return { visit: null, now: now(), last_paid: lp ? { id: lp.id, paid_at: lp.paid_at, total: lp.total, reviewed: db.reviews.some(r => r.visit_id === lp.id) } : null }; }
+      return { now: now(), last_paid: null, visit: { id: v.id, status: v.status, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice,
+        orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson),
+        calls: db.calls.filter(c => c.visit_id === v.id && !c.done_at).map(c => ({ kind: c.kind, at: c.created_at, seen: !!c.seen_at })),
+        bill: bill(v.id), wifi: s.wifi_name ? { name: s.wifi_name, password: s.wifi_password } : null,
+        upi: s.pay_upi && s.upi_id ? { id: s.upi_id, name: s.upi_name || s.restaurant_name } : null } }; },
+    guest_order({ p_token, p_items, p_note, p_guests }){ const t = tableBy(p_token); if (!db.settings.accepting_orders) err(db.settings.closed_message);
+      return addOrder(t.id, p_items, p_note, p_guests, "guest"); },
+    guest_call({ p_token, p_kind }){ const t = tableBy(p_token); if (!["waiter", "water", "bill", "help"].includes(p_kind)) err("Unknown request.");
+      if (db.calls.some(c => c.table_id === t.id && c.kind === p_kind && !c.done_at)) return { ok: true, already: true };
+      const v = openVisit(t.id); db.calls.push({ id: uid(), table_id: t.id, visit_id: v ? v.id : null, kind: p_kind, created_at: now(), seen_at: null, seen_by: null, done_at: null });
+      save(); return { ok: true, already: false }; },
+    guest_bill({ p_token, p_split, p_tip_pct, p_pay }){ const t = tableBy(p_token), v = openVisit(t.id);
+      if (!v) err("There's no open bill for this table.");
+      if (!db.orders.some(o => o.visit_id === v.id && o.status !== "cancelled")) err("Nothing has been ordered yet.");
+      if (p_tip_pct && !db.settings.tip_options.includes(+p_tip_pct)) err("Pick one of the tip options.");
+      Object.assign(v, { status: "bill", bill_at: v.bill_at || now(), split: Math.max(1, Math.min(+p_split || 1, 20)), tip_pct: +p_tip_pct || 0, pay_choice: p_pay || "" });
+      if (!db.calls.some(c => c.table_id === t.id && c.kind === "bill" && !c.done_at))
+        db.calls.push({ id: uid(), table_id: t.id, visit_id: v.id, kind: "bill", created_at: now(), seen_at: null, seen_by: null, done_at: null });
+      save(); return bill(v.id); },
+    guest_review({ p_token, p_visit, p_stars, p_comment }){ const t = tableBy(p_token);
+      const v = db.visits.find(x => x.id === p_visit && x.table_id === t.id && x.status !== "void"); if (!v) err("This visit can't be rated any more.");
+      if (!(p_stars >= 1 && p_stars <= 5)) err("Pick 1 to 5 stars.");
+      const r = db.reviews.find(x => x.visit_id === v.id);
+      if (r) Object.assign(r, { stars: p_stars, comment: String(p_comment || "").slice(0, 600), created_at: now() });
+      else db.reviews.push({ id: uid(), visit_id: v.id, table_id: t.id, stars: p_stars, comment: String(p_comment || "").slice(0, 600), created_at: now() });
+      save(); return { ok: true }; },
+
+    staff_me(){ const m = me(); return m ? { id: m.id, name: m.name, email: m.email, role: m.role, active: m.active } : null; },
+    staff_live(){ need(role()); localStorage.setItem(HB, String(Date.now())); const s = db.settings, today = dayKey(new Date());
+      const paidToday = db.visits.filter(v => v.status === "paid" && dayKey(v.paid_at) === today);
+      const flow = {}; db.visits.filter(v => v.status !== "void" && dayKey(v.opened_at) === today).forEach(v => { const h = new Date(v.opened_at).getHours(); flow[h] = (flow[h] || 0) + 1; });
+      const rt = db.reviews.filter(r => dayKey(r.created_at) === today);
+      return { now: now(), role: role(),
+        settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name },
+        tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active })),
+        visits: db.visits.filter(v => v.status === "open" || v.status === "bill").map(v => ({ id: v.id, table_id: v.table_id, status: v.status, opened_at: v.opened_at,
+          bill_at: v.bill_at, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice, bill: bill(v.id),
+          orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson) })),
+        calls: db.calls.filter(c => !c.done_at).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
+          .map(c => ({ id: c.id, table_id: c.table_id, kind: c.kind, at: c.created_at, seen_at: c.seen_at, seen_by: (db.staff.find(x => x.id === c.seen_by) || {}).name || null })),
+        today: { sales: paidToday.reduce((a, v) => a + v.total, 0), bills: paidToday.length,
+          orders: db.orders.filter(o => o.status !== "cancelled" && dayKey(o.created_at) === today).length,
+          guests: db.visits.filter(v => v.status !== "void" && dayKey(v.opened_at) === today).reduce((a, v) => a + (v.guests || 0), 0),
+          rating: rt.length ? Math.round(rt.reduce((a, r) => a + r.stars, 0) / rt.length * 10) / 10 : null, flow } }; },
+    staff_order_status({ p_order, p_status, p_reason }){ const r = role(); need(r);
+      const o = db.orders.find(x => x.id === p_order); if (!o) err("That order is gone.");
+      if (p_status === "cancelled") { need(["owner", "manager"].includes(r) || (r === "waiter" && o.status === "new"));
+        if ((db.visits.find(v => v.id === o.visit_id) || {}).status === "paid") err("This bill is already paid."); }
+      o.status = p_status;
+      o.started_at = p_status === "new" ? null : (o.started_at || (p_status !== "cancelled" ? now() : null));
+      o.ready_at = ["new", "cooking"].includes(p_status) ? null : ["ready", "served"].includes(p_status) ? (o.ready_at || now()) : o.ready_at;
+      o.served_at = p_status === "served" ? (o.served_at || now()) : p_status === "cancelled" ? o.served_at : null;
+      o.cancel_reason = p_status === "cancelled" ? String(p_reason || "").slice(0, 200) : "";
+      if (p_status === "cancelled") log("order_cancelled", "#" + o.no + (p_reason ? " · " + p_reason : ""));
+      save(); return orderJson(o); },
+    staff_add_order({ p_table, p_items, p_note, p_guests }){ need(isFloor()); if (!db.tables.some(t => t.id === p_table)) err("Unknown table.");
+      return addOrder(p_table, p_items, p_note, p_guests, "staff"); },
+    staff_call({ p_call, p_action }){ need(isFloor()); const c = db.calls.find(x => x.id === p_call); if (!c) return null;
+      c.seen_at = c.seen_at || now(); c.seen_by = c.seen_by || me().id; if (p_action === "done") c.done_at = now(); save(); return null; },
+    staff_visit_update({ p_visit, p_split, p_tip_pct, p_guests }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && (x.status === "open" || x.status === "bill"));
+      if (!v) err("This table's bill is already closed.");
+      if (p_split != null) v.split = Math.max(1, Math.min(+p_split, 20)); if (p_tip_pct != null) v.tip_pct = Math.max(0, Math.min(+p_tip_pct, 30));
+      if (p_guests >= 1) v.guests = +p_guests; save(); return bill(v.id); },
+    staff_mark_paid({ p_visit, p_method }){ need(isFloor()); if (!["upi", "cash", "card", "mixed"].includes(p_method)) err("Pick how they paid.");
+      const v = db.visits.find(x => x.id === p_visit); if (!v || !["open", "bill"].includes(v.status)) err("This bill is already closed.");
+      if (db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) err("Some dishes are still with the kitchen. Serve or cancel them first.");
+      Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: p_method, paid_by: me().id });
+      db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = o.served_at || now(); });
+      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
+      save(); return bill(v.id); },
+    staff_void_visit({ p_visit, p_reason }){ need(isManager()); if (String(p_reason || "").trim().length < 3) err("Write a short reason.");
+      const v = db.visits.find(x => x.id === p_visit && ["open", "bill"].includes(x.status)); if (!v) err("This bill is already closed.");
+      v.status = "void"; v.void_reason = p_reason;
+      db.orders.filter(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status)).forEach(o => { o.status = "cancelled"; o.cancel_reason = "Table cleared"; });
+      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
+      log("table_cleared", (db.tables.find(t => t.id === v.table_id) || {}).code + " · " + p_reason); save(); return null; },
+    staff_menu(){ need(role()); return { categories: clone(db.categories).sort((a, b) => a.sort - b.sort), items: clone(db.items).sort((a, b) => a.sort - b.sort) }; },
+    staff_item_available({ p_item, p_available }){ need(role()); const i = db.items.find(x => x.id === p_item); if (i) { i.available = !!p_available; log(p_available ? "back_on_menu" : "sold_out", i.name); } save(); return null; },
+    staff_bills({ p_from, p_to }){ need(isFloor());
+      return db.visits.filter(v => ["paid", "void"].includes(v.status) && inRange(v.paid_at || v.opened_at, p_from, p_to))
+        .sort((a, b) => (a.paid_at || a.opened_at) < (b.paid_at || b.opened_at) ? 1 : -1)
+        .map(v => ({ id: v.id, table: (db.tables.find(t => t.id === v.table_id) || {}).code, opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
+          method: v.paid_method, total: v.total, tip: v.tip, guests: v.guests, void_reason: v.void_reason, by: (db.staff.find(s => s.id === v.paid_by) || {}).name || null,
+          bill: bill(v.id), stars: (db.reviews.find(r => r.visit_id === v.id) || {}).stars || null })); },
+
+    owner_save_category({ p }){ need(isManager()); if (!String(p.name || "").trim() && !p.id) err("Give the section a name.");
+      let c = p.id && db.categories.find(x => x.id === p.id);
+      if (!c) { c = { id: uid(), name: p.name.trim(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.categories.map(x => x.sort)) + 1, active: p.active !== false }; db.categories.push(c); }
+      else { if (p.name != null) c.name = String(p.name).trim(); if (p.sort != null) c.sort = +p.sort; if (p.active != null) c.active = !!p.active; }
+      save(); return c.id; },
+    owner_delete_category({ p_id }){ need(isManager()); if (db.items.some(i => i.category_id === p_id)) err("Move or delete the dishes in this section first.");
+      db.categories = db.categories.filter(c => c.id !== p_id); save(); return null; },
+    owner_save_item({ p }){ need(isManager());
+      if ([...(p.sizes || []), ...(p.addons || [])].some(x => !String(x.name || "").trim() || x.price == null || +x.price < 0)) err("Every size and extra needs a name and a price.");
+      if (!String(p.name || "").trim()) err("Give the dish a name.");
+      const row = { category_id: p.category_id, name: String(p.name).trim(), description: p.description || "", price: +p.price || 0, diet: p.diet || "veg",
+        spice: p.spice === "" || p.spice == null ? null : +p.spice, allergens: p.allergens || [], sizes: (p.sizes || []).map(x => ({ name: x.name.trim(), price: +x.price })),
+        addons: (p.addons || []).map(x => ({ name: x.name.trim(), price: +x.price })), photo_url: p.photo_url || "", bestseller: !!p.bestseller, available: p.available !== false };
+      let i = p.id && db.items.find(x => x.id === p.id);
+      if (i) Object.assign(i, row, p.sort != null ? { sort: +p.sort } : {});
+      else { i = Object.assign({ id: uid(), created_at: now(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.items.map(x => x.sort)) + 1 }, row); db.items.push(i); }
+      save(); return i.id; },
+    owner_delete_item({ p_id }){ need(isManager()); const i = db.items.find(x => x.id === p_id); db.items = db.items.filter(x => x.id !== p_id); log("dish_deleted", ""); save(); return i ? i.photo_url : null; },
+    owner_save_table({ p }){ need(isManager()); const code = String(p.code || "").trim().toUpperCase();
+      if (!/^[A-Z0-9-]{1,12}$/.test(code)) err("Use up to 12 letters, numbers or dashes for the table number.");
+      if (db.tables.some(t => t.code === code && t.id !== p.id)) err("Another table already uses that number.");
+      let t = p.id && db.tables.find(x => x.id === p.id);
+      const row = { code, name: p.name || "", area: String(p.area || "").trim() || "Main", seats: +p.seats || 4, active: p.active !== false };
+      if (t) Object.assign(t, row, p.sort != null ? { sort: +p.sort } : {});
+      else { t = Object.assign({ id: uid(), token: "demo-" + code + "-" + Math.random().toString(36).slice(2, 6), sort: Math.max(0, ...db.tables.map(x => x.sort)) + 1 }, row); db.tables.push(t); }
+      save(); return t.id; },
+    owner_delete_table({ p_id }){ need(isManager()); if (db.visits.some(v => v.table_id === p_id)) err("This table has bills on record. Switch it off instead.");
+      db.tables = db.tables.filter(t => t.id !== p_id); save(); return null; },
+    owner_table_tokens(){ need(isManager()); const o = {}; db.tables.forEach(t => o[t.id] = t.token); return o; },
+    owner_new_token({ p_id }){ need(isManager()); const t = db.tables.find(x => x.id === p_id); t.token = "demo-" + t.code + "-" + Math.random().toString(36).slice(2, 6);
+      log("qr_replaced", t.code); save(); return t.token; },
+    owner_settings(){ need(role()); return clone(db.settings); },
+    owner_save_settings({ p }){ need(isManager()); if (role() !== "owner" && Object.keys(p).some(k => k !== "accepting_orders")) err("Only the owner can change settings.");
+      if (p.accent && !/^#[0-9A-Fa-f]{6}$/.test(p.accent)) err("Pick a colour.");
+      if (p.gst_pct != null && (+p.gst_pct < 0 || +p.gst_pct > 28)) err("GST must be between 0 and 28%.");
+      if (p.service_pct != null && (+p.service_pct < 0 || +p.service_pct > 20)) err("Service charge must be between 0 and 20%.");
+      Object.keys(p).forEach(k => { if (k in db.settings && p[k] != null && !(k === "restaurant_name" && !String(p[k]).trim())) db.settings[k] = ["gst_pct", "service_pct"].includes(k) ? +p[k] : p[k]; });
+      if ("accepting_orders" in p) log(p.accepting_orders ? "orders_on" : "orders_off", ""); else log("settings_changed", "");
+      db.settings.updated_at = now(); save(); return null; },
+    owner_report({ p_from, p_to }){ need(isManager());
+      const paid = db.visits.filter(v => v.status === "paid" && inRange(v.paid_at, p_from, p_to));
+      const byDay = {}, byHour = {}, methods = {}, top = {};
+      paid.forEach(v => { const d = dayKey(v.paid_at); byDay[d] = byDay[d] || { day: d, sales: 0, bills: 0 }; byDay[d].sales += v.total; byDay[d].bills++;
+        const h = new Date(v.opened_at).getHours(); byHour[h] = (byHour[h] || 0) + 1; methods[v.paid_method] = (methods[v.paid_method] || 0) + v.total;
+        db.orders.filter(o => o.visit_id === v.id && o.status !== "cancelled").forEach(o => o.items.forEach(i => {
+          top[i.name] = top[i.name] || { name: i.name, qty: 0, amount: 0 }; top[i.name].qty += i.qty; top[i.name].amount += i.line_total; })); });
+      const ords = db.orders.filter(o => o.ready_at && inRange(o.created_at, p_from, p_to));
+      const revs = db.reviews.filter(r => inRange(r.created_at, p_from, p_to)).sort((a, b) => a.created_at < b.created_at ? 1 : -1);
+      const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
+      return { sales: sum(paid, v => v.total), tips: sum(paid, v => v.tip), gst: sum(paid, v => v.gst), bills: paid.length, guests: sum(paid, v => v.guests || 0),
+        voids: db.visits.filter(v => v.status === "void" && inRange(v.opened_at, p_from, p_to)).length,
+        by_day: Object.values(byDay).sort((a, b) => a.day < b.day ? -1 : 1), by_hour: byHour, methods,
+        top: Object.values(top).sort((a, b) => b.qty - a.qty || b.amount - a.amount).slice(0, 10),
+        prep_mins: ords.length ? Math.round(sum(ords, o => (new Date(o.ready_at) - new Date(o.created_at)) / 60e3) / ords.length * 10) / 10 : null,
+        rating: revs.length ? Math.round(sum(revs, r => r.stars) / revs.length * 100) / 100 : null, ratings: revs.length,
+        reviews: revs.slice(0, 50).map(r => ({ stars: r.stars, comment: r.comment, at: r.created_at, table: (db.tables.find(t => t.id === r.table_id) || {}).code })) }; },
+    owner_team(){ need(role() === "owner"); return { staff: clone(db.staff) }; },
+    owner_activity(){ need(role() === "owner"); return clone(db.activity); }
+  };
+
+  return {
+    rpc(fn, args){
+      load();
+      return new Promise((ok, bad) => setTimeout(() => { try { if (!F[fn]) err("Not available in the demo: " + fn); ok(clone(F[fn](args) ?? null)); } catch(e){ bad(e); } }, 60));
+    },
+    user(){ load(); return me(); },
+    signIn(email){ load(); const u = db.staff.find(s => s.email === String(email).toLowerCase() && s.active); if (!u) err("Pick a demo login."); store.set(WHO, u.id); },
+    signOut(){ store.set(WHO, null); },
+    teamAdmin(b){ load(); need(role() === "owner");
+      if (b.action === "add") { if (!b.name || !/^\S+@\S+\.\S+$/.test(b.email || "")) err("Enter a name and a valid email.");
+        if ((b.password || "").length < 8) err("The password must be at least 8 characters.");
+        if (db.staff.some(s => s.email === b.email.toLowerCase())) err("That email already has a login.");
+        db.staff.push({ id: uid(), name: b.name, email: b.email.toLowerCase(), phone: b.phone || "", role: b.role || "waiter", active: true, created_at: now() }); log("login_added", b.name + " (" + b.role + ")"); }
+      else if (b.action === "update") { const s = db.staff.find(x => x.id === b.id); if (!s) err("Unknown login.");
+        if (s.id === me().id && (b.role !== "owner" || b.active === false)) err("You can't remove your own owner access.");
+        Object.assign(s, { name: b.name, email: (b.email || s.email).toLowerCase(), phone: b.phone || "", role: b.role }, typeof b.active === "boolean" ? { active: b.active } : {}); }
+      else if (b.action === "delete") { if (b.id === me().id) err("You can't delete your own login."); db.staff = db.staff.filter(x => x.id !== b.id); log("login_deleted", ""); }
+      else if (b.action === "password") { if ((b.password || "").length < 8) err("The password must be at least 8 characters."); }
+      save(); return Promise.resolve({ ok: true }); },
+    reset(){ db = seed(); save(); store.set(WHO, null); },
+    TEAM
+  };
+})();

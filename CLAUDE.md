@@ -1,0 +1,28 @@
+# Dinedot — project notes
+
+QR table ordering for restaurants: guests scan a table QR, order from the menu, see live status, get the guest Wi-Fi, call a waiter, split the bill, tip and pay by UPI, then rate the visit. Staff run it from one app: kitchen screen, floor map, bills, menu, tables & QR, dashboard, settings. "Dinedot" is a working name. This repo is the **template**: each restaurant gets its own copy on its own Supabase project (same pattern as Studio CRM).
+
+## Stack (same family as Vroombrite)
+- Plain static HTML/CSS/JS, no build step, served by GitHub Pages from the root of `main`. No framework.
+- **Supabase** (Mumbai region) for data. Schema, security and every function are in `supabase/migrations/` (run in order). `supabase/sample_menu.sql` is optional sample data. Test locally on plain Postgres: `psql -v ON_ERROR_STOP=1 -f supabase/test/stub.sql -f supabase/migrations/0001_init.sql -f supabase/sample_menu.sql -f supabase/test/test.sql` → `ALL TESTS PASSED`. New schema changes go in a new numbered migration; publish an app change only after its migration is run.
+- Pages call database functions (`/rest/v1/rpc/<fn>`) with plain `fetch` (`api.js`). All tables have RLS on and no grants. Guests (anon) may only call `guest_menu`, `guest_state`, `guest_order`, `guest_call`, `guest_bill`, `guest_review`, and each needs the table's secret QR token. Prices are always worked out in the database (`price_cart`, `visit_bill`), never taken from the browser.
+- **Demo mode**: when `supabaseUrl`/`supabaseKey` in `config.js` are empty (or `?demo` is in the URL), `demo.js` runs the same functions in the browser on a sample restaurant ("The Copper Pot"), saved in localStorage and shared between tabs. With no staff tab open, a pretend kitchen moves new orders along so a single phone demo works. **Any change to a database function must be mirrored in `demo.js`** (same inputs and output shape).
+- Roles: owner (all) · manager (all but Settings; may pause ordering) · waiter (floor, kitchen, bills, take orders, mark paid, cancel New orders) · kitchen (kitchen screen, sold-out switches). Checked in SQL (`is_floor`, `is_manager`, `is_owner`) and mirrored in `staff.js` NAV.
+- Logins: Supabase Auth email/password. First login = owner; later ones start switched off. Team screen uses the edge function `supabase/functions/team-admin` (deploy via the Supabase editor).
+- Dish photos: public Storage bucket `menu-photos` (managers upload; shrunk to 1000 px JPEG in the browser).
+- Money: subtotal → service % on subtotal → GST % on (subtotal + service) → total rounded to the rupee → tip % on subtotal (rounded). Split = ceil(grand / ways). Frozen on the visit when marked paid.
+
+## Files
+- `t.html` + `guest.js` + `guest.css` — guest page (`t.html?k=<token>`). Mobile-first, dark by default with a light version; accent colour from Settings.
+- `staff.html` + `staff.js` + `staff.css` + `staff-guide.js` — staff app (hash routes `#dash #floor #kitchen #bills #menu #tables #settings/<tab> #help`). Studio-CRM-family layout (frosted panels, floating sidebar, bottom tab bar on phones, light/dark) in Dinedot colours. Polls `staff_live` every 4 s; sound + toast on new orders and calls.
+- `index.html` — product page with demo links. `config.js` — the only per-restaurant file. `vendor/qrcode.js` — qrcode-generator 1.4.4 (MIT).
+
+## Rules
+- **Help guide rule:** every visible staff-app change updates `staff-guide.js` (its section + a `WHATS_NEW` line) in the same commit.
+- Keep parallel screens consistent (same drawer, list and button patterns).
+- Testing standard: check guest and staff pages at 390 px and 1440 px, light and dark, and run the SQL tests.
+- Guest privacy (DPDP): the system never asks guests for name, phone or email; no tracking scripts; keys only the publishable one in `config.js`.
+- Payments: UPI deep links to the restaurant's own UPI ID (zero fee); staff confirm with Mark paid. A gateway (auto-paid) is a later phase.
+
+## Brand (working)
+Ink `#0E0F12` / `#17191E`, turmeric amber `#F5A524` (accent, overridable per restaurant), veg `#2FA65A`, non-veg `#D9473F`, egg `#E2A23B`, ok `#34C77B`. Type: Bricolage Grotesque (headings), Inter (body), JetBrains Mono (labels). Logo: amber ring + dot ("dine dot") on ink.
