@@ -13,7 +13,7 @@ grant execute on function pg_temp.expect_fail(text, text) to anon, authenticated
 
 insert into auth.users (id, email) values ('20000000-0000-4000-8000-000000000001', 'owner@x.in'),
   ('20000000-0000-4000-8000-000000000002', 'waiter@x.in');
-update staff set active = true where email = 'waiter@x.in';
+update memberships set active = true where user_id = (select id from staff where email = 'waiter@x.in');   -- since 0004
 
 -- R-03: guests can run exactly the six guest functions, and nothing created later -----------------
 do $$ declare fns text; begin

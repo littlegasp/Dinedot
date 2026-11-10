@@ -14,8 +14,10 @@ grant execute on function pg_temp.expect_fail(text, text) to anon, authenticated
 insert into auth.users (id, email) values ('10000000-0000-4000-8000-000000000001', 'owner@x.in'),
   ('10000000-0000-4000-8000-000000000002', 'waiter@x.in'), ('10000000-0000-4000-8000-000000000003', 'chef@x.in');
 do $$ begin
-  assert (select role from staff where email='owner@x.in') = 'owner' and (select active from staff where email='owner@x.in');
-  assert not (select active from staff where email='waiter@x.in');
+  -- since 0004 role and on/off live in memberships
+  assert (select m.role from memberships m join staff s on s.id = m.user_id where s.email='owner@x.in') = 'owner'
+     and (select m.active from memberships m join staff s on s.id = m.user_id where s.email='owner@x.in');
+  assert not (select m.active from memberships m join staff s on s.id = m.user_id where s.email='waiter@x.in');
 end $$;
 
 -- Guest (anon) cannot read tables directly

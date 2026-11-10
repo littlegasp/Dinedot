@@ -5,6 +5,10 @@
 // gives the key to this function by itself; it is never in the repo or the app.
 // The function only acts for a signed-in, active owner, checked through the database.
 //
+// Many restaurants (0004): a new login joins the owner's current restaurant. Changing a
+// login's email or password, or deleting it, is allowed only when the owner controls that
+// login (it works nowhere the owner doesn't own); otherwise only this team's entry changes.
+//
 // Deploy once: Supabase dashboard → Edge Functions → Deploy a new function → Via editor,
 // name it  team-admin , paste this file, Deploy.
 
@@ -66,7 +70,9 @@ export async function handle(req: Request, env: (k: string) => string | undefine
     const name = s("name"), email = s("email").toLowerCase(), role = roleOf(s("role"));
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) return reply(400, { error: "Enter a name and a valid email." });
     if (pw.length < MIN_PASSWORD) return reply(400, { error: `The password must be at least ${MIN_PASSWORD} characters.` });
-    const { data, error } = await admin.auth.admin.createUser({ email, password: pw, email_confirm: true, user_metadata: { full_name: name } });
+    // app_metadata can only be set with the service key, so the database can trust it
+    const app_metadata = me.restaurant_id ? { restaurant_id: me.restaurant_id } : undefined;
+    const { data, error } = await admin.auth.admin.createUser({ email, password: pw, email_confirm: true, user_metadata: { full_name: name }, app_metadata });
     if (error || !data.user) return reply(400, { error: /already|exists|registered/i.test(error?.message ?? "") ? "That email already has a login." : error?.message ?? "Couldn't add the login." });
     // New logins start switched off as waiters; set them up as asked, switched on.
     const { error: e2 } = await asOwner.rpc("owner_edit_staff", { p_id: data.user.id, p_name: name, p_phone: s("phone"), p_role: role, p_active: true });
@@ -82,6 +88,8 @@ export async function handle(req: Request, env: (k: string) => string | undefine
     const { data: u, error: ue } = await admin.auth.admin.getUserById(id);
     if (ue || !u.user) return reply(404, { error: "Unknown login." });
     if ((u.user.email ?? "").toLowerCase() !== email) {
+      const { data: mine } = await asOwner.rpc("owner_controls_login", { p_id: id });
+      if (mine !== true) return reply(403, { error: "This person also works at another restaurant, so only they can change their email." });
       const { error } = await admin.auth.admin.updateUserById(id, { email, email_confirm: true });
       if (error) return reply(400, { error: /already|exists|registered/i.test(error.message) ? "That email already has a login." : error.message });
     }
@@ -98,6 +106,8 @@ export async function handle(req: Request, env: (k: string) => string | undefine
     const { data: team, error: te } = await asOwner.rpc("owner_team");
     const who = (team?.staff ?? []).find((x: { id: string }) => x.id === id);
     if (te || !who) return reply(404, { error: "Unknown login." });
+    const { data: mine } = await asOwner.rpc("owner_controls_login", { p_id: id });
+    if (mine !== true) return reply(403, { error: "This person also works at another restaurant, so only they can change their password." });
     const { error } = await admin.auth.admin.updateUserById(id, { password: pw });
     if (error) return fail(error);
     await asOwner.rpc("owner_log", { p_action: "login_password", p_detail: who.name });
@@ -108,9 +118,11 @@ export async function handle(req: Request, env: (k: string) => string | undefine
     const id = s("id");
     if (!UUID.test(id)) return reply(400, { error: "Unknown login." });
     if (id === me.id) return reply(400, { error: "You can't delete your own login." });
-    // Switches them off and logs it; refuses for your own login.
-    const { error: pe } = await asOwner.rpc("owner_prepare_delete", { p_id: id });
+    // Takes them off this team and logs it; refuses for your own login. Returns true only
+    // when they work nowhere else, and only then is the login itself deleted.
+    const { data: whole, error: pe } = await asOwner.rpc("owner_prepare_delete", { p_id: id });
     if (pe) return fail(pe);
+    if (whole === false) return reply(200, { ok: true, removed_from_team_only: true });
     const { error } = await admin.auth.admin.deleteUser(id);
     if (error) return fail(error);
     return reply(200, { ok: true });

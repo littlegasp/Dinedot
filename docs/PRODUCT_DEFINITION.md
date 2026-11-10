@@ -1,6 +1,6 @@
 # DineOS: product definition (v1)
 
-Status: **design prototype, waiting for approval.** Branch `dineos`. Nothing here is live yet;
+Status: **prototype approved 11 Nov 2026; Phase 3 database foundation (migration 0004) done.** Branch `dineos`. Nothing here is live yet;
 the current Dinedot app on `main` keeps running unchanged until DineOS replaces it.
 
 ## Decisions (agreed 11 Nov 2026)
@@ -38,12 +38,16 @@ Roles are checked in SQL; the sidebar only hides what the database would refuse 
 
 Bell with notifications · Ctrl K search · update bar · team notice · push alerts for new orders and calls · offline queue for orders on bad Wi-Fi · guided tour · Help guide updated in the same commit as every visible change · activity history · daily backups (30 days) · privacy and terms pages · receipts (print and share) · light and dark themes.
 
-## Multi-tenant model (Phase 3)
+## Multi-tenant model (Phase 3, built in `supabase/migrations/0004_restaurants.sql`)
 
 - New tables `restaurants` and `memberships(restaurant_id, user_id, role)`.
-- `restaurant_id` on every existing table, row level security by membership.
+- `restaurant_id` on every existing table. Tables stay fully locked (RLS on, no grants); every function filters by the caller's restaurant, and a trigger refuses cross-restaurant links.
 - Guest access stays token-based: the table QR token identifies the restaurant and table.
 - Forward-only migrations from 0004; the 0001–0003 safety tests keep passing.
+- Signing up: a fresh install's first login owns the one restaurant; Team-screen invites join the owner's restaurant; anyone else starts with no restaurant and can create one (`create_restaurant`, up to 10 each).
+- One person can work in several restaurants (`staff_restaurants`, `staff_switch_restaurant`). An owner can change a login's email or password, or delete it, only if that person works nowhere the owner doesn't own; otherwise they are just taken off the team.
+- Suspending a restaurant stops its QR codes and staff screens; deleting it removes every row it owns (tested).
+- Still to do: inviting someone who already has a login (today: "That email already has a login").
 
 ## Design
 
