@@ -1,6 +1,6 @@
 # DineOS — Migration Plan (Phase 0)
 
-Principle: **incremental, observable, reversible.** Nothing below has been started.
+Principle: **incremental, observable, reversible.** Done so far: stage 1 (audit), 4.1 (hardening migration `0003`) and 4.2 (tests + CI) — 11 Nov 2026.
 
 ## 1. Ground rules
 

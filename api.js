@@ -7,6 +7,9 @@ const store = {
   set(k, v){ try{ v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 
+/* One id per order attempt: a retry after a dropped connection sends the same id, so the order is saved once. */
+const newRequestId = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
+
 /* Same money rules as visit_bill() in the database. Used by the demo and for previews. */
 const Money = {
   bill(lines, s, tipPct, split){

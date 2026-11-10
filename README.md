@@ -12,7 +12,7 @@ One QR on every table. Guests order, call a waiter and pay from their phone; sta
 
 ## Setting up a restaurant (once per restaurant)
 1. **Supabase** → new project, region **Mumbai**.
-2. **SQL Editor** → run every file in `supabase/migrations/` in order (`0001_init.sql`, then `0002_cover_photo.sql`). Optional: run `supabase/sample_menu.sql` for a sample menu and six tables.
+2. **SQL Editor** → run every file in `supabase/migrations/` in order (`0001_init.sql`, `0002_cover_photo.sql`, `0003_hardening.sql`). Optional: run `supabase/sample_menu.sql` for a sample menu and six tables.
 3. **Authentication → Users → Add user** with the owner's email and a password, tick **Auto Confirm User**. The first login becomes the owner.
 4. **Authentication → Sign In / Providers** → turn off **Allow new users to sign up**.
 5. **Authentication → URL Configuration** → Site URL = the site address; add `<site>/staff.html` to Redirect URLs (for "Forgot password?").
@@ -22,6 +22,7 @@ One QR on every table. Guests order, call a waiter and pay from their phone; sta
 
 ## Tests
 ```
-psql -v ON_ERROR_STOP=1 -f supabase/test/stub.sql -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_cover_photo.sql \
-     -f supabase/sample_menu.sql -f supabase/test/test.sql      # → ALL TESTS PASSED
+PGHOST=… PGPORT=… PGUSER=postgres supabase/test/run.sh     # database: ALL / 0003 / RACE TESTS PASSED
+python3 -m http.server 8765 & node tests/e2e/flow.mjs    # browser journey: E2E PASSED
 ```
+Both also run automatically on GitHub for every push (Actions → Tests).

@@ -375,7 +375,7 @@ function report(R){
       <div class="card"><h2>What guests said</h2><div class="rows">${R.reviews.filter(r => r.comment).slice(0, 8).map(r => `<div class="r"><div class="grow"><span class="stars">${"★".repeat(r.stars)}</span> ${esc(r.comment)}<div class="muted">${esc(r.table || "")} · ${dateTxt(r.at)}</div></div></div>`).join("") || `<div class="empty">No comments yet.</div>`}</div></div>
     </div>`;
 }
-const actText = a => ({ order_cancelled: "Order cancelled", table_cleared: "Table cleared", sold_out: "Marked sold out", back_on_menu: "Back on the menu", dish_deleted: "Dish deleted",
+const actText = a => ({ bill_paid: "Bill paid", bill_changed: "Bill split/tip changed", price_changed: "Price changed", dish_added: "Dish added", dish_renamed: "Dish renamed", order_cancelled: "Order cancelled", table_cleared: "Table cleared", sold_out: "Marked sold out", back_on_menu: "Back on the menu", dish_deleted: "Dish deleted",
   qr_replaced: "QR code replaced", orders_on: "QR ordering switched on", orders_off: "QR ordering paused", settings_changed: "Settings changed", login_added: "Login added",
   login_changed: "Login changed", login_deleted: "Login deleted", login_password: "Password changed" })[a] || a;
 
@@ -428,7 +428,9 @@ function tableDrawer(tid){
           <span>Split <span class="stepper"><button data-vu="split:-1">−</button><b>${v.split}</b><button data-vu="split:1">+</button></span></span>
           <span>Guests <span class="stepper"><button data-vu="guests:-1">−</button><b>${v.guests || "–"}</b><button data-vu="guests:1">+</button></span></span></div>
         <div class="chips" style="margin-top:10px">${[0, 5, 10, 15].map(p => `<button class="chip ${v.tip_pct == p ? "on" : ""}" data-vtip="${p}">${p ? "Tip " + p + "%" : "No tip"}</button>`).join("")}</div>
-        <div class="lbl">Mark paid</div><div class="paybtns"><button class="btn ok" data-paid="upi">UPI</button><button class="btn ok" data-paid="cash">Cash</button><button class="btn ok" data-paid="card">Card</button></div>
+        <div class="lbl">Mark paid</div>
+        <input class="in" id="payRef" maxlength="60" placeholder="UPI ref (UTR) or card slip no. — optional" style="margin-bottom:8px" autocomplete="off">
+        <div class="paybtns"><button class="btn ok" data-paid="upi">UPI</button><button class="btn ok" data-paid="cash">Cash</button><button class="btn ok" data-paid="card">Card</button></div>
         <div class="d-foot"><button class="btn ghost" data-take="${tid}">${I.plus} Add to order</button>${LIVE.settings.upi_id ? `<button class="btn ghost" data-upiqr>UPI QR</button>` : ""}<button class="btn ghost" data-printbill>${I.print} Print</button></div>
         <div id="upiBox"></div>
         ${can.manage() ? `<div class="d-foot"><button class="btn danger" data-void>Clear table without payment…</button></div>` : ""}`;
@@ -441,7 +443,7 @@ function tableDrawer(tid){
 /* Take an order (waiter) */
 let pick = null;
 function takeOrder(tid){
-  pick = { table: tid, lines: [], q: "", open: null, size: "", addons: [], note: "", guests: 2 };
+  pick = { table: tid, lines: [], q: "", open: null, size: "", addons: [], note: "", guests: 2, request: null };
   if (!MENU) API.rpc("staff_menu").then(m => { MENU = m; if (drawerFn === drawPick) drawPick(); }).catch(fail);
   openDrawer(drawPick, false);
 }
@@ -493,7 +495,7 @@ function billDrawer(id){
       B.lines.map(l => `<div class="o-line"><span class="grow">${l.qty} × ${esc(l.name)} <small>${[l.size, ...(l.addons || [])].filter(Boolean).map(esc).join(" · ")}</small></span><span>${money(l.amount)}</span></div>`).join("") +
       `<div class="tot"><div><span>Item total</span><span>${money(B.subtotal)}</span></div>${B.service ? `<div><span>Service</span><span>${money(B.service)}</span></div>` : ""}${B.gst ? `<div><span>GST</span><span>${money(B.gst)}</span></div>` : ""}
         ${B.tip ? `<div><span>Tip</span><span>${money(B.tip)}</span></div>` : ""}<div class="g"><span>Total</span><span>${money(B.grand)}</span></div></div>
-      ${b.status === "paid" ? `<p style="margin-top:10px;color:var(--muted);font-size:13.5px">Paid by ${esc((b.method || "").toUpperCase())}${b.stars ? ` · rated <span class="stars">${"★".repeat(b.stars)}</span>` : ""}</p>
+      ${b.status === "paid" ? `<p style="margin-top:10px;color:var(--muted);font-size:13.5px">Paid by ${esc((b.method || "").toUpperCase())}${b.ref ? " · ref " + esc(b.ref) : ""}${b.stars ? ` · rated <span class="stars">${"★".repeat(b.stars)}</span>` : ""}</p>
       <div class="d-foot"><button class="btn ghost" data-printpaid="${b.id}">${I.print} Print bill</button></div>` : ""}`;
   });
 }
@@ -627,8 +629,8 @@ function openPassword(recovered){
 
 /* CSV of bills (owner) */
 function downloadCsv(){
-  const rows = [["Date", "Opened", "Paid", "Table", "Guests", "Status", "Paid by", "Item total", "Service", "GST", "Tip", "Total", "Staff", "Rating"]];
-  BILLS.forEach(b => rows.push([(b.paid_at || b.opened_at).slice(0, 10), clock(b.opened_at), clock(b.paid_at), b.table, b.guests || "", b.status, b.method || "", b.bill.subtotal, b.bill.service, b.bill.gst, b.bill.tip, b.status === "paid" ? b.total : 0, b.by || "", b.stars || ""]));
+  const rows = [["Date", "Opened", "Paid", "Table", "Guests", "Status", "Paid by", "Reference", "Item total", "Service", "GST", "Tip", "Total", "Staff", "Rating"]];
+  BILLS.forEach(b => rows.push([(b.paid_at || b.opened_at).slice(0, 10), clock(b.opened_at), clock(b.paid_at), b.table, b.guests || "", b.status, b.method || "", b.ref || "", b.bill.subtotal, b.bill.service, b.bill.gst, b.bill.tip, b.status === "paid" ? b.total : 0, b.by || "", b.stars || ""]));
   const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" })); a.download = `bills-${billFrom}-to-${billTo}.csv`; a.click();
 }
@@ -670,7 +672,8 @@ document.addEventListener("click", async e => {
     act("staff_visit_update", args).catch(() => {}); return; }
   if (d.vtip !== undefined) { act("staff_visit_update", { p_visit: vid, p_split: null, p_tip_pct: +d.vtip, p_guests: null }).catch(() => {}); return; }
   if (d.paid) { if (!confirmTap("p" + d.paid, el, "Confirm " + d.paid.toUpperCase())) return;
-    try { await API.rpc("staff_mark_paid", { p_visit: vid, p_method: d.paid }); closeDrawer(); toast("Paid by " + d.paid.toUpperCase() + " · table is free"); await tick(); } catch(err){ fail(err); } return; }
+    const ref = (($("payRef") || {}).value || "").trim();
+    try { await API.rpc("staff_mark_paid", { p_visit: vid, p_method: d.paid, p_reference: ref }); closeDrawer(); toast("Paid by " + d.paid.toUpperCase() + (ref ? " · ref saved" : "") + " · table is free"); await tick(); } catch(err){ fail(err); } return; }
   if (d.upiqr !== undefined) { const v = LIVE.visits.find(x => x.id === vid), s = LIVE.settings, t = tableOf(v.table_id);
     $("upiBox").innerHTML = `<div class="qrbox">${qrSvg("upi://pay?pa=" + encodeURIComponent(s.upi_id) + "&pn=" + encodeURIComponent(s.upi_name || s.name) + "&am=" + v.bill.grand + "&cu=INR&tn=" + encodeURIComponent(t.code + " bill"))}</div><p style="text-align:center;font-weight:700">${money(v.bill.grand)} to ${esc(s.upi_id)}</p>`; return; }
   if (d.printbill !== undefined) { const v = LIVE.visits.find(x => x.id === vid); printBill(v.bill, tableOf(v.table_id).code); return; }
@@ -681,17 +684,17 @@ document.addEventListener("click", async e => {
   if (d.backtable) return tableDrawer(d.backtable);
 
   /* take order */
-  if (d.pick) { const i = MENU.items.find(x => x.id === d.pick);
+  if (d.pick) { pick.request = null; const i = MENU.items.find(x => x.id === d.pick);
     if (!i.sizes.length && !i.addons.length) { const k = pick.lines.find(l => l.id === i.id && !l.size && !l.addons.length && !l.note); if (k) k.qty++; else pick.lines.push({ id: i.id, name: i.name, size: "", addons: [], note: "", qty: 1, unit: +i.price }); }
     else { pick.open = i.id; pick.size = i.sizes.length ? i.sizes[0].name : ""; pick.addons = []; pick.note = ""; }
     drawPick(); return; }
   if (d.psize) { pick.size = d.psize; drawPick(); return; }
   if (d.padd) { const a = pick.addons, n = a.indexOf(d.padd); n < 0 ? a.push(d.padd) : a.splice(n, 1); drawPick(); return; }
-  if (d.paddGo) { const i = MENU.items.find(x => x.id === d.paddGo); pick.lines.push({ id: i.id, name: i.name, size: pick.size, addons: pick.addons.slice(), note: pick.note.trim(), qty: 1, unit: drawPick.unit(i, pick.size, pick.addons) }); pick.open = null; drawPick(); return; }
-  if (d.pq) { const [k, n] = d.pq.split(":").map(Number); pick.lines[k].qty += n; if (pick.lines[k].qty <= 0) pick.lines.splice(k, 1); drawPick(); return; }
+  if (d.paddGo) { pick.request = null; const i = MENU.items.find(x => x.id === d.paddGo); pick.lines.push({ id: i.id, name: i.name, size: pick.size, addons: pick.addons.slice(), note: pick.note.trim(), qty: 1, unit: drawPick.unit(i, pick.size, pick.addons) }); pick.open = null; drawPick(); return; }
+  if (d.pq) { pick.request = null; const [k, n] = d.pq.split(":").map(Number); pick.lines[k].qty += n; if (pick.lines[k].qty <= 0) pick.lines.splice(k, 1); drawPick(); return; }
   if (d.pg) { pick.guests = Math.max(1, pick.guests + +d.pg); drawPick(); return; }
-  if (d.sendorder !== undefined) { el.disabled = true;
-    try { await API.rpc("staff_add_order", { p_table: pick.table, p_items: pick.lines.map(l => ({ id: l.id, qty: l.qty, size: l.size, addons: l.addons, note: l.note })), p_note: "", p_guests: visitOf(pick.table) ? null : pick.guests });
+  if (d.sendorder !== undefined) { el.disabled = true; pick.request = pick.request || newRequestId();
+    try { await API.rpc("staff_add_order", { p_table: pick.table, p_items: pick.lines.map(l => ({ id: l.id, qty: l.qty, size: l.size, addons: l.addons, note: l.note })), p_note: "", p_guests: visitOf(pick.table) ? null : pick.guests, p_request_id: pick.request });
       toast("Sent to the kitchen"); await tick(); tableDrawer(pick.table); } catch(err){ fail(err); el.disabled = false; } return; }
 
   /* bills */

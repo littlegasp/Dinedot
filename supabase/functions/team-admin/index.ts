@@ -86,7 +86,7 @@ export async function handle(req: Request, env: (k: string) => string | undefine
       if (error) return reply(400, { error: /already|exists|registered/i.test(error.message) ? "That email already has a login." : error.message });
     }
     const { error } = await asOwner.rpc("owner_edit_staff", { p_id: id, p_name: name, p_phone: s("phone"), p_role: role,
-      p_active: typeof body.active === "boolean" ? body.active : null });
+      p_active: typeof body.active === "boolean" ? body.active : null, p_email: email });
     if (error) return fail(error);
     return reply(200, { ok: true });
   }
