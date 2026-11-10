@@ -1,0 +1,43 @@
+# DineOS — Known Risks (Phase 0)
+
+Audited commit `7d7c296`. **Confirmed** = reproduced today by a test or probe. **Code-read** = seen in source, not exercised. **Open** = cannot be judged without information from the product owner or a hosted environment.
+
+Severity: **High** (data loss, money error, security exposure, or legal exposure) · **Medium** (wrong data or bad experience under realistic conditions) · **Low** (polish, maintainability).
+
+| ID | Area | Risk | Severity | Evidence | Suggested fix (not done — needs approval) |
+|---|---|---|---|---|---|
+| R-01 | Data / UX | **Two first orders on one table at the same moment:** the second guest gets a raw database error (`duplicate key … one_open_visit_per_table`) and their order is lost | High | **Confirmed** (probe 1: two sessions, second fails). `add_order` 0001 L334–339 selects the open visit `for update`, but when none exists both sessions insert | Insert with `on conflict do nothing` then re-select, or take an advisory lock per table; return a friendly retry message |
+| R-02 | Data integrity | **No order state machine.** Any status can move to any status, including on bills already paid (probe: a paid bill's order moved `served → new → cooking`; paid total unchanged; kitchen no longer shows it) | High | **Confirmed** (probe 2). `staff_order_status` L510 checks role but not the current state or the visit status | Allowed-transition table (`new→cooking→ready→served`, back-steps only before payment); refuse changes on `paid`/`void` visits |
+| R-03 | Security | **Future functions are open to guests by default.** Supabase grants EXECUTE on new functions in `public` to `anon`; 0001 revokes only on functions that existed when it ran (L239, L854) | High | **Confirmed** (probe 3: a function created afterwards was callable by `anon`) | First line of every migration: `alter default privileges in schema public revoke execute on functions from public, anon, authenticated;` plus a test that lists anon-executable functions |
+| R-04 | Legal / finance | **Bills are not GST tax invoices.** No invoice number series, GSTIN, HSN/SAC, CGST/SGST split, or per-item tax rate (one GST % for the whole menu) | High (for real restaurants) | Code-read: `settings.gst_pct` single value; `printBill` staff.js L590 | Needs an accountant's spec before building (Owner decision D-06) |
+| R-05 | Data | **No idempotency on order submission.** A network retry or double submit can create a duplicate order; the guest 15-second rule (L343) limits but does not prevent it, and staff orders have no such rule | Medium | Code-read | Client-generated `request_id` stored with a unique constraint; return the existing order on repeat |
+| R-06 | Security / deploy | **First login becomes owner.** If public sign-up is left on before the owner is created, anyone could become owner | Medium | Code-read: `handle_new_staff` L49–57; README step 4 tells the installer to disable sign-ups | Seed the owner by SQL/CLI instead; refuse auto-owner unless a one-time setup code matches |
+| R-07 | Finance | Daily totals are counted by **pay time**, guests by **open time**; no daily close, no cash-drawer reconciliation, no refund model | Medium | Code-read: `owner_report` L776 | Define the business day (e.g. 4 am cut-off) and a close-of-day record (Phase 5) |
+| R-08 | Finance | **Payment record is thin:** only `paid_method`, `paid_at`, `paid_by` — no amount tendered, reference (UPI UTR / card slip), or multiple tenders | Medium | **Confirmed** (probe 4 lists columns) | `payments` table: visit, method, amount, reference, actor, status; visit closes when payments ≥ total |
+| R-09 | Finance | UPI deep link is **not proof of payment**; staff tap "Mark paid" from what the guest shows them | Medium (accepted today) | Code-read: `upiHtml`, `staff_mark_paid` | Record UTR when marking UPI paid; later a gateway or UPI collect with webhook (D-05) |
+| R-10 | Compliance | **Service charge** can be switched on and is added automatically to the bill. Indian consumer guidelines restrict mandatory service charges | Medium | Code-read: `visit_bill` L286ff | Confirm current legal position (D-07); possibly make it guest-optional and clearly labelled |
+| R-11 | Operations | **Polling, not realtime:** staff every 4 s, guest every 5 s. At 30 tables × several screens this is fine; at scale or on weak networks it costs data and battery; there is no stale-data indicator | Medium | Code-read: staff.js L99, guest.js L53 | Supabase Realtime with polling fallback + "last updated" indicator |
+| R-12 | Audit | **Sensitive actions not logged:** payments, price/menu edits, split/tip changes, item deletions keep no before/after | Medium | **Confirmed** by grep (no `log_it` in `staff_mark_paid`, `owner_save_item`, `staff_visit_update`) | Structured audit table (actor, action, entity, before, after) written inside each function |
+| R-13 | Data | Changing a staff email in Team updates the login, but `staff.email` keeps the old address | Low | Code-read: `team-admin` L84–89 updates auth only; `owner_edit_staff` L820 has no email | Pass email to `owner_edit_staff` |
+| R-14 | Data | `tip_options` not range-checked in SQL; a value above 30 makes `guest_bill` fail on the `tip_pct` check | Low | Code-read: 0002 L53 vs 0001 `visits.tip_pct` check | Validate 0–30 in `owner_save_settings` |
+| R-15 | Edge function | `team-admin` never run on a hosted project; partial failure possible (email changed in Auth, then role update fails) | Medium | Not exercised | Run against a test project; order updates so DB changes happen first |
+| R-16 | Quality | **No CI and no committed E2E tests.** SQL tests run by hand; today's browser tests live outside the repo | Medium | `git ls-files` shows only `supabase/test/*` | Commit Playwright suite + GitHub Action running SQL + E2E on every PR |
+| R-17 | Security | No security headers / CSP (GitHub Pages cannot set headers); Google Fonts loaded from Google (guest IPs reach Google) | Low–Medium | No `_headers`; fonts in all HTML | Host on Cloudflare (headers) and self-host fonts |
+| R-18 | Privacy | Anyone holding a table's QR link sees that table's open bill and Wi-Fi password, even from outside the restaurant | Low (by design) | `guest_state` | Already mitigated by "Replace QR"; optionally expire visits after N hours idle |
+| R-19 | Accessibility | Dish rows, list rows and photo boxes are clickable `<div>`s (not keyboard reachable); guest sheets don't trap focus; status shown partly by colour | Medium | Code-read (guest.js `dishRow`; staff.js list rows) | Buttons/links, focus management, text labels on every status |
+| R-20 | Money | Browser previews use JavaScript numbers (`Money.bill`, api.js L11); the database is authoritative, but a preview could differ by a paisa from the final bill | Low | Code-read | Preview from the server, or integer paise in JS |
+| R-21 | Maintainability | Large single files: `staff.js` 761 lines with one global click handler; no types; demo duplicates every DB function by hand (must be kept in step) | Medium | File sizes; `demo.js` | Typed modules, generated DB types; replace hand mirror with a seeded test backend (see Architecture) |
+| R-22 | Deployment | **Template model:** each restaurant = own repo copy + own Supabase. Fixes must be re-applied to every copy; no staging environment | Medium (grows per customer) | README setup steps | Decide SaaS vs per-restaurant (D-01) |
+| R-23 | Operations | Order numbers are one global sequence (`order_no_seq` L174), not per day; kitchens usually expect a daily reset | Low | Code-read | Daily ticket number derived from business day |
+| R-24 | Data | Dish delete removes the photo from the browser side (best effort) — orphaned photos possible; no Storage clean-up job | Low | `owner_delete_item` returns the URL; `API.removePhoto` | Delete from Storage inside a trusted function or a scheduled clean-up |
+| R-25 | Brand | Renaming to DineOS: trademark, domain and app-store availability unchecked | Open | — | Search IP India classes 9/42/43 before public use (D-02) |
+
+## Top five to fix first (in this order)
+
+1. **R-03** — default function privileges (one-line migration + test; prevents future exposure).
+2. **R-01** — first-order race (data loss for a real guest).
+3. **R-02** — order state machine (data integrity on paid bills).
+4. **R-05 / R-08** — idempotent orders and a real `payments` table (foundation for POS).
+5. **R-16** — commit tests and CI before any redesign work, so nothing regresses.
+
+These are small, isolated database changes that make the current product safer **whatever architecture is chosen**. They would go in a new forward migration (`0003_…`), tested locally first. **Not started — waiting for approval.**
