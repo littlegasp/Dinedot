@@ -21,7 +21,7 @@ const IC = {
 
 /* ---------------- helpers ---------------- */
 function toast(msg, bad){ const t = $("toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 3200); }
-const saveCart = () => store.set(CART_KEY, cart);
+const saveCart = () => { store.set(CART_KEY, cart); pendingRequest = null; };   // a changed cart is a new order
 const item = id => M.items.find(i => i.id === id);
 const lineKey = l => l.id + "|" + (l.size || "") + "|" + (l.addons || []).slice().sort().join(",") + "|" + (l.note || "");
 function unitPrice(it, size, addons){
@@ -197,12 +197,15 @@ function renderCart(){
     <div class="row-end"><button class="btn" id="placeBtn" data-place>Place order · ${money(cartTotal())}</button></div>`);
   $("oNote").addEventListener("input", e => orderNote = e.target.value);
 }
+let pendingRequest = null;   // kept until the order is confirmed, so "Try again" can't send it twice
 async function placeOrder(){
   const b = $("placeBtn"); b.disabled = true; b.textContent = "Sending to the kitchen…";
+  pendingRequest = pendingRequest || newRequestId();
   try {
     const first = !activeOrders().length;
     await API.rpc("guest_order", { p_token: TOKEN, p_items: cart.map(l => ({ id: l.id, qty: l.qty, size: l.size || "", addons: l.addons || [], note: l.note || "" })),
-      p_note: orderNote, p_guests: first ? guests : null });
+      p_note: orderNote, p_guests: first ? guests : null, p_request_id: pendingRequest });
+    pendingRequest = null;
     cart = []; orderNote = ""; saveCart(); renderMenu();
     await poll(true); lastSig = ""; await poll();
     confetti(); tableTab = "orders"; renderTable(); toast("Order sent to the kitchen!");

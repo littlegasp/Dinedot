@@ -1,0 +1,12 @@
+{
+  "name": "dinedot",
+  "private": true,
+  "description": "Test tools only — the app itself has no build step.",
+  "scripts": {
+    "test:db": "supabase/test/run.sh",
+    "test:e2e": "node tests/e2e/flow.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

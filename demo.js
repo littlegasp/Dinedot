@@ -153,7 +153,9 @@ const Demo = (() => {
       return { item_id: m.id, name: m.name, size, addons, diet: m.diet, qty, unit_price: unit, line_total: unit * qty, note: String(it.note || "").slice(0, 200) };
     }).filter(() => { if (count > 60) err("That's a lot of dishes. Please ask a waiter."); return true; });
   }
-  function addOrder(tid, items, note, guests, source){
+  function addOrder(tid, items, note, guests, source, request){
+    if (request) { const prev = db.orders.find(o => o.request_id === request);
+      if (prev) { if (prev.table_id !== tid) err("That order belongs to another table."); return { order: orderJson(prev), visit_id: prev.visit_id, repeat: true }; } }
     const lines = priceCart(items);
     let v = openVisit(tid);
     if (!v) { v = { id: uid(), table_id: tid, opened_at: now(), status: "open", guests: guests >= 1 ? guests : null, split: 1, tip_pct: 0, pay_choice: "",
@@ -164,7 +166,8 @@ const Demo = (() => {
       v.status = "open"; if (!v.guests && guests >= 1) v.guests = guests;
     }
     const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: tid, source, created_by: source === "staff" ? me().id : null, status: "new",
-      note: String(note || "").slice(0, 300), created_at: now(), started_at: null, ready_at: null, served_at: null, cancel_reason: "", items: lines };
+      note: String(note || "").slice(0, 300), created_at: now(), started_at: null, ready_at: null, served_at: null, cancel_reason: "", items: lines,
+      request_id: request || null };
     db.orders.push(o); save();
     return { order: orderJson(o), visit_id: v.id };
   }
@@ -196,6 +199,9 @@ const Demo = (() => {
     if (changed) save();
   }
 
+  /* Allowed order steps — same list as order_step_ok() in 0003_hardening.sql */
+  const STEPS = ["new>cooking", "new>cancelled", "cooking>ready", "cooking>new", "cooking>cancelled", "ready>served", "ready>cooking", "ready>cancelled", "served>ready"];
+
   /* ---------- the functions ---------- */
   const F = {
     guest_menu({ p_token }){ const t = tableBy(p_token), s = db.settings;
@@ -216,8 +222,8 @@ const Demo = (() => {
         calls: db.calls.filter(c => c.visit_id === v.id && !c.done_at).map(c => ({ kind: c.kind, at: c.created_at, seen: !!c.seen_at })),
         bill: bill(v.id), wifi: s.wifi_name ? { name: s.wifi_name, password: s.wifi_password } : null,
         upi: s.pay_upi && s.upi_id ? { id: s.upi_id, name: s.upi_name || s.restaurant_name } : null } }; },
-    guest_order({ p_token, p_items, p_note, p_guests }){ const t = tableBy(p_token); if (!db.settings.accepting_orders) err(db.settings.closed_message);
-      return addOrder(t.id, p_items, p_note, p_guests, "guest"); },
+    guest_order({ p_token, p_items, p_note, p_guests, p_request_id }){ const t = tableBy(p_token); if (!db.settings.accepting_orders) err(db.settings.closed_message);
+      return addOrder(t.id, p_items, p_note, p_guests, "guest", p_request_id); },
     guest_call({ p_token, p_kind }){ const t = tableBy(p_token); if (!["waiter", "water", "bill", "help"].includes(p_kind)) err("Unknown request.");
       if (db.calls.some(c => c.table_id === t.id && c.kind === p_kind && !c.done_at)) return { ok: true, already: true };
       const v = openVisit(t.id); db.calls.push({ id: uid(), table_id: t.id, visit_id: v ? v.id : null, kind: p_kind, created_at: now(), seen_at: null, seen_by: null, done_at: null });
@@ -257,8 +263,11 @@ const Demo = (() => {
           rating: rt.length ? Math.round(rt.reduce((a, r) => a + r.stars, 0) / rt.length * 10) / 10 : null, flow } }; },
     staff_order_status({ p_order, p_status, p_reason }){ const r = role(); need(r);
       const o = db.orders.find(x => x.id === p_order); if (!o) err("That order is gone.");
-      if (p_status === "cancelled") { need(["owner", "manager"].includes(r) || (r === "waiter" && o.status === "new"));
-        if ((db.visits.find(v => v.id === o.visit_id) || {}).status === "paid") err("This bill is already paid."); }
+      if (!["new", "cooking", "ready", "served", "cancelled"].includes(p_status)) err("Unknown status.");
+      if (["paid", "void"].includes((db.visits.find(v => v.id === o.visit_id) || {}).status)) err("This bill is already closed, so its orders can't change.");
+      if (o.status === p_status) return orderJson(o);
+      if (!STEPS.includes(o.status + ">" + p_status)) err("This order is " + o.status + " and can't go to " + p_status + " from there. Refresh the screen.");
+      if (p_status === "cancelled") need(["owner", "manager"].includes(r) || (r === "waiter" && o.status === "new"));
       o.status = p_status;
       o.started_at = p_status === "new" ? null : (o.started_at || (p_status !== "cancelled" ? now() : null));
       o.ready_at = ["new", "cooking"].includes(p_status) ? null : ["ready", "served"].includes(p_status) ? (o.ready_at || now()) : o.ready_at;
@@ -266,18 +275,24 @@ const Demo = (() => {
       o.cancel_reason = p_status === "cancelled" ? String(p_reason || "").slice(0, 200) : "";
       if (p_status === "cancelled") log("order_cancelled", "#" + o.no + (p_reason ? " · " + p_reason : ""));
       save(); return orderJson(o); },
-    staff_add_order({ p_table, p_items, p_note, p_guests }){ need(isFloor()); if (!db.tables.some(t => t.id === p_table)) err("Unknown table.");
-      return addOrder(p_table, p_items, p_note, p_guests, "staff"); },
+    staff_add_order({ p_table, p_items, p_note, p_guests, p_request_id }){ need(isFloor()); if (!db.tables.some(t => t.id === p_table)) err("Unknown table.");
+      return addOrder(p_table, p_items, p_note, p_guests, "staff", p_request_id); },
     staff_call({ p_call, p_action }){ need(isFloor()); const c = db.calls.find(x => x.id === p_call); if (!c) return null;
       c.seen_at = c.seen_at || now(); c.seen_by = c.seen_by || me().id; if (p_action === "done") c.done_at = now(); save(); return null; },
     staff_visit_update({ p_visit, p_split, p_tip_pct, p_guests }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && (x.status === "open" || x.status === "bill"));
       if (!v) err("This table's bill is already closed.");
+      const was = { split: v.split, tip: v.tip_pct };
       if (p_split != null) v.split = Math.max(1, Math.min(+p_split, 20)); if (p_tip_pct != null) v.tip_pct = Math.max(0, Math.min(+p_tip_pct, 30));
-      if (p_guests >= 1) v.guests = +p_guests; save(); return bill(v.id); },
-    staff_mark_paid({ p_visit, p_method }){ need(isFloor()); if (!["upi", "cash", "card", "mixed"].includes(p_method)) err("Pick how they paid.");
+      if (p_guests >= 1) v.guests = +p_guests;
+      if (was.split !== v.split || was.tip !== v.tip_pct) log("bill_changed", (db.tables.find(t => t.id === v.table_id) || {}).code + " · split " + was.split + "→" + v.split + " · tip " + was.tip + "%→" + v.tip_pct + "%");
+      save(); return bill(v.id); },
+    staff_mark_paid({ p_visit, p_method, p_reference }){ need(isFloor()); if (!["upi", "cash", "card", "mixed"].includes(p_method)) err("Pick how they paid.");
+      const ref = String(p_reference || "").trim(); if (ref.length > 60) err("The reference is too long.");
       const v = db.visits.find(x => x.id === p_visit); if (!v || !["open", "bill"].includes(v.status)) err("This bill is already closed.");
       if (db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) err("Some dishes are still with the kitchen. Serve or cancel them first.");
       Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: p_method, paid_by: me().id });
+      (db.payments = db.payments || []).push({ id: uid(), visit_id: v.id, method: p_method, amount: v.total, reference: ref, status: "captured", created_by: me().id, created_at: now() });
+      log("bill_paid", (db.tables.find(t => t.id === v.table_id) || {}).code + " · " + p_method.toUpperCase() + " · ₹" + v.total + (ref ? " · ref " + ref : ""));
       db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = o.served_at || now(); });
       db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
       save(); return bill(v.id); },
@@ -294,7 +309,8 @@ const Demo = (() => {
         .sort((a, b) => (a.paid_at || a.opened_at) < (b.paid_at || b.opened_at) ? 1 : -1)
         .map(v => ({ id: v.id, table: (db.tables.find(t => t.id === v.table_id) || {}).code, opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
           method: v.paid_method, total: v.total, tip: v.tip, guests: v.guests, void_reason: v.void_reason, by: (db.staff.find(s => s.id === v.paid_by) || {}).name || null,
-          bill: bill(v.id), stars: (db.reviews.find(r => r.visit_id === v.id) || {}).stars || null })); },
+          bill: bill(v.id), ref: (db.payments || []).filter(x => x.visit_id === v.id && x.reference).map(x => x.reference).join(", ") || null,
+          stars: (db.reviews.find(r => r.visit_id === v.id) || {}).stars || null })); },
 
     owner_save_category({ p }){ need(isManager()); if (!String(p.name || "").trim() && !p.id) err("Give the section a name.");
       let c = p.id && db.categories.find(x => x.id === p.id);
@@ -310,10 +326,14 @@ const Demo = (() => {
         spice: p.spice === "" || p.spice == null ? null : +p.spice, allergens: p.allergens || [], sizes: (p.sizes || []).map(x => ({ name: x.name.trim(), price: +x.price })),
         addons: (p.addons || []).map(x => ({ name: x.name.trim(), price: +x.price })), photo_url: p.photo_url || "", bestseller: !!p.bestseller, available: p.available !== false };
       let i = p.id && db.items.find(x => x.id === p.id);
-      if (i) Object.assign(i, row, p.sort != null ? { sort: +p.sort } : {});
-      else { i = Object.assign({ id: uid(), created_at: now(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.items.map(x => x.sort)) + 1 }, row); db.items.push(i); }
+      if (i) { const sz = JSON.stringify([i.sizes, i.addons]) !== JSON.stringify([row.sizes, row.addons]);
+        if (i.price !== row.price || sz) log("price_changed", row.name + " · ₹" + i.price + " → ₹" + row.price + (sz ? " · sizes/extras changed" : ""));
+        if (i.name !== row.name) log("dish_renamed", i.name + " → " + row.name);
+        Object.assign(i, row, p.sort != null ? { sort: +p.sort } : {}); }
+      else { i = Object.assign({ id: uid(), created_at: now(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.items.map(x => x.sort)) + 1 }, row); db.items.push(i);
+        log("dish_added", row.name + " · ₹" + row.price); }
       save(); return i.id; },
-    owner_delete_item({ p_id }){ need(isManager()); const i = db.items.find(x => x.id === p_id); db.items = db.items.filter(x => x.id !== p_id); log("dish_deleted", ""); save(); return i ? i.photo_url : null; },
+    owner_delete_item({ p_id }){ need(isManager()); const i = db.items.find(x => x.id === p_id); db.items = db.items.filter(x => x.id !== p_id); if (i) log("dish_deleted", i.name + " · ₹" + i.price); save(); return i ? i.photo_url : null; },
     owner_save_table({ p }){ need(isManager()); const code = String(p.code || "").trim().toUpperCase();
       if (!/^[A-Z0-9-]{1,12}$/.test(code)) err("Use up to 12 letters, numbers or dashes for the table number.");
       if (db.tables.some(t => t.code === code && t.id !== p.id)) err("Another table already uses that number.");
@@ -332,6 +352,7 @@ const Demo = (() => {
       if (p.accent && !/^#[0-9A-Fa-f]{6}$/.test(p.accent)) err("Pick a colour.");
       if (p.cover_url && !/^(https:\/\/|img\/|data:image\/)/.test(p.cover_url)) err("The cover photo must be an uploaded photo.");
       if (p.gst_pct != null && (+p.gst_pct < 0 || +p.gst_pct > 28)) err("GST must be between 0 and 28%.");
+      if (p.tip_options && p.tip_options.some(x => !(x >= 0 && x <= 30))) err("Tip choices must be between 0 and 30%.");
       if (p.service_pct != null && (+p.service_pct < 0 || +p.service_pct > 20)) err("Service charge must be between 0 and 20%.");
       Object.keys(p).forEach(k => { if (k in db.settings && p[k] != null && !(k === "restaurant_name" && !String(p[k]).trim())) db.settings[k] = ["gst_pct", "service_pct"].includes(k) ? +p[k] : p[k]; });
       if ("cover_url" in p && !("cover_url" in db.settings)) db.settings.cover_url = p.cover_url;
