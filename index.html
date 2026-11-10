@@ -3,50 +3,296 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dinedot</title>
-<meta name="description" content="QR table ordering for restaurants: menu, kitchen screen, floor map, bills with split, tip and UPI, ratings and a live dashboard.">
+<title>Dinedot — QR table ordering</title>
+<meta name="description" content="QR table ordering for restaurants: guests order, call a waiter and pay by UPI from their phone; your kitchen, floor and bills run from one app.">
+<meta property="og:title" content="Dinedot — QR table ordering for restaurants">
+<meta property="og:description" content="One QR on every table. Menu, ordering, kitchen screen, waiter calls, split bills and UPI — in one system.">
+<meta property="og:image" content="img/site/og.jpg">
+<meta name="theme-color" content="#0E0F12">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0E0F12;--panel:#17191E;--line:rgba(255,255,255,.09);--tx:#F4F1EA;--mut:#9C9AA2;--ac:#F5A524;--ink:#1A1206;color-scheme:dark}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#F6F3EC;--panel:#FFFFFF;--line:rgba(20,18,12,.1);--tx:#1A1814;--mut:#6B675E;color-scheme:light}}
-:root[data-theme="dark"]{--bg:#0E0F12;--panel:#17191E;--line:rgba(255,255,255,.09);--tx:#F4F1EA;--mut:#9C9AA2;color-scheme:dark}
+:root{--bg:#0E0F12;--bg2:#121317;--panel:#17191E;--panel2:#1F2228;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.15);--tx:#F4F1EA;--mut:#A3A1A8;--dim:#75737B;
+  --ac:#F5A524;--ink:#1A1206;--ok:#34C77B;--red:#E5574F;--veg:#2FA65A;--shadow:0 30px 80px -30px rgba(0,0,0,.7);
+  --fd:"Bricolage Grotesque",Inter,system-ui,sans-serif;--fb:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--fm:"JetBrains Mono",ui-monospace,monospace;color-scheme:dark}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#F7F4EE;--bg2:#EFEBE3;--panel:#FFFFFF;--panel2:#F3EFE7;--line:rgba(20,18,12,.09);--line2:rgba(20,18,12,.16);--tx:#17150F;--mut:#5F5B52;--dim:#8A857A;--shadow:0 30px 70px -32px rgba(60,40,0,.35);color-scheme:light}}
+:root[data-theme="dark"]{--bg:#0E0F12;--bg2:#121317;--panel:#17191E;--panel2:#1F2228;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.15);--tx:#F4F1EA;--mut:#A3A1A8;--dim:#75737B;color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font:16px/1.55 Inter,system-ui,sans-serif;min-height:100vh;
-  background-image:radial-gradient(70% 50% at 50% -5%,color-mix(in srgb,var(--ac) 20%,transparent),transparent 70%)}
-.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 60px}
-.logo{display:flex;align-items:center;gap:10px;font:800 22px "Bricolage Grotesque",sans-serif}
-.logo img{width:36px;height:36px}
-h1{font:800 clamp(38px,7vw,68px)/1 "Bricolage Grotesque",sans-serif;letter-spacing:-.03em;margin:64px 0 18px;max-width:780px}
-h1 em{font-style:normal;color:var(--ac)}
-.lead{color:var(--mut);font-size:18px;max-width:600px}
-.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 20px;border-radius:14px;font-weight:700;text-decoration:none;background:var(--ac);color:var(--ink)}
-.btn.ghost{background:var(--panel);color:var(--tx);border:1px solid var(--line)}
-.tip{color:var(--mut);font-size:14px;margin-top:12px}
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:64px}
-.step{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:20px}
-.step b{font:600 11px "JetBrains Mono",monospace;letter-spacing:.12em;color:var(--ac)}
-.step h3{font:800 20px "Bricolage Grotesque",sans-serif;margin:8px 0 6px}
-.step p{color:var(--mut);font-size:14.5px}
-footer{color:var(--mut);font-size:13px;margin-top:48px}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{background:var(--bg);color:var(--tx);font:16px/1.6 var(--fb);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+.kick{font:600 12px var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--ac)}
+h1,h2,h3{font-family:var(--fd);font-weight:800;letter-spacing:-.025em;line-height:1.04}
+h2{font-size:clamp(30px,4.6vw,48px)}
+.lead{color:var(--mut);font-size:clamp(16px,1.6vw,19px);max-width:560px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:14px 22px;border-radius:14px;font-weight:700;font-size:15.5px;text-decoration:none;background:var(--ac);color:var(--ink);border:1px solid var(--ac);transition:transform .15s,filter .15s;white-space:nowrap}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.btn.ghost{background:transparent;color:var(--tx);border-color:var(--line2)}
+.btn svg{width:18px;height:18px}
+
+/* nav */
+nav.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:22px;height:68px}
+.logo{display:flex;align-items:center;gap:10px;font:800 21px var(--fd);text-decoration:none;letter-spacing:-.02em}
+.logo img{width:34px;height:34px}
+nav.top .links{display:flex;gap:22px;margin-left:auto;font-size:14.5px;font-weight:600;color:var(--mut)}
+nav.top .links a{text-decoration:none} nav.top .links a:hover{color:var(--tx)}
+nav.top .btn{padding:10px 16px;font-size:14px}
+
+/* hero */
+.hero{position:relative;padding:64px 0 40px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:-20% -10% auto;height:620px;background:radial-gradient(50% 60% at 70% 30%,color-mix(in srgb,var(--ac) 22%,transparent),transparent 70%);pointer-events:none}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;position:relative}
+.hero h1{font-size:clamp(40px,6.4vw,74px);margin:16px 0 20px}
+.hero h1 em{font-style:normal;color:var(--ac)}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
+.ticks{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:26px;color:var(--mut);font-size:14px;font-weight:500}
+.ticks span::before{content:"✓";color:var(--ok);font-weight:800;margin-right:7px}
+.stage{position:relative;aspect-ratio:4/5;max-width:520px;justify-self:end;width:100%}
+.stage .photo{position:absolute;inset:0 0 0 18%;border-radius:30px;overflow:hidden;box-shadow:var(--shadow)}
+.stage .photo img{width:100%;height:100%;object-fit:cover}
+.stage .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(200deg,transparent 40%,rgba(0,0,0,.45))}
+.phone{position:relative;border-radius:38px;padding:9px;background:#0b0b0d;box-shadow:0 0 0 1.5px #2a2a30,var(--shadow)}
+.phone::before{content:"";position:absolute;top:16px;left:50%;transform:translateX(-50%);width:84px;height:22px;border-radius:12px;background:#0b0b0d;z-index:2}
+.phone img{border-radius:30px;width:100%;aspect-ratio:390/844;object-fit:cover;object-position:top;background:#111}
+.stage .phone{position:absolute;left:0;bottom:6%;width:46%;z-index:2}
+.toastcard{position:absolute;z-index:3;display:flex;align-items:center;gap:12px;padding:12px 15px;border-radius:16px;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px);border:1px solid var(--line2);box-shadow:var(--shadow);font-size:13.5px;line-height:1.35;animation:float 5s ease-in-out infinite}
+.toastcard b{display:block;font-size:14px}
+.toastcard small{color:var(--mut)}
+.toastcard i{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-size:17px;flex:none}
+.t1{right:-4%;top:9%} .t1 i{background:color-mix(in srgb,var(--ac) 22%,transparent)}
+.t2{right:6%;bottom:12%;animation-delay:-2.5s} .t2 i{background:color-mix(in srgb,var(--ok) 22%,transparent)}
+@keyframes float{50%{transform:translateY(-8px)}}
+
+/* facts strip */
+.facts{border-block:1px solid var(--line);background:var(--bg2)}
+.facts .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-block:26px}
+.fact b{display:block;font:800 22px var(--fd);letter-spacing:-.01em}
+.fact span{color:var(--mut);font-size:14px}
+
+/* sections */
+section{padding:96px 0}
+.head{max-width:680px;margin-bottom:54px}
+.head h2{margin:12px 0 14px}
+.step{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;margin-bottom:96px}
+.step:last-child{margin-bottom:0}
+.step.flip .media{order:2}
+.step .num{font:600 13px var(--fm);letter-spacing:.12em;color:var(--ac)}
+.step h3{font-size:clamp(26px,3.4vw,38px);margin:10px 0 14px}
+.step ul{list-style:none;margin-top:18px;display:grid;gap:9px;color:var(--mut)}
+.step li{padding-left:26px;position:relative}
+.step li::before{content:"";position:absolute;left:0;top:9px;width:14px;height:6px;border-left:2px solid var(--ac);border-bottom:2px solid var(--ac);transform:rotate(-45deg)}
+.media{position:relative;display:flex;justify-content:center;align-items:center;min-height:420px;border-radius:32px;background:radial-gradient(80% 70% at 50% 40%,color-mix(in srgb,var(--ac) 16%,var(--panel)),var(--bg2));border:1px solid var(--line);padding:36px 20px;overflow:hidden}
+.media .phone{width:min(270px,70%)}
+.media .phone + .phone{position:absolute;right:6%;bottom:-12%;width:min(200px,46%);opacity:.95}
+.media.wide{padding:28px}
+.screen{border-radius:16px;overflow:hidden;border:1px solid var(--line2);box-shadow:var(--shadow);background:#111;width:100%}
+.screen .bar{display:flex;gap:6px;padding:10px 12px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.screen .bar i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
+.screen img{width:100%}
+
+/* kitchen band */
+.band{position:relative;border-radius:34px;overflow:hidden;min-height:520px;display:grid;align-items:end;box-shadow:var(--shadow)}
+.band > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,8,10,.92) 0%,rgba(8,8,10,.7) 45%,rgba(8,8,10,.1) 100%)}
+.band .in{position:relative;z-index:1;padding:clamp(28px,5vw,60px);max-width:560px;color:#F4F1EA}
+.band .in p{color:#C9C5BD;margin-top:14px}
+.band .in h2{margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.chips span{padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;color:#F4F1EA;background:rgba(255,255,255,.06)}
+
+/* features */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px}
+.card .ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb,var(--ac) 16%,transparent);color:var(--ac);margin-bottom:16px}
+.card .ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.card h3{font-size:19px;letter-spacing:-.01em;margin-bottom:6px}
+.card p{color:var(--mut);font-size:14.5px}
+
+/* dashboard */
+.dash{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:center}
+.roles{display:grid;gap:10px;margin-top:22px}
+.role{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:16px;background:var(--panel);border:1px solid var(--line)}
+.role b{font-family:var(--fd);font-size:16px;min-width:76px}
+.role span{color:var(--mut);font-size:14px}
+
+/* faq */
+.faq{max-width:780px;margin:0 auto}
+details{border-bottom:1px solid var(--line);padding:20px 0}
+summary{cursor:pointer;list-style:none;font:700 18px var(--fd);display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--ac);font-size:24px;line-height:1;transition:transform .2s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{color:var(--mut);margin-top:10px}
+
+/* final cta */
+.final{text-align:center;border-radius:34px;padding:clamp(44px,7vw,80px) 20px;background:radial-gradient(70% 90% at 50% 0%,color-mix(in srgb,var(--ac) 26%,var(--panel)),var(--panel));border:1px solid var(--line)}
+.final h2{max-width:720px;margin:0 auto 14px}
+.final .lead{margin:0 auto}
+.final .cta{justify-content:center}
+footer{padding:40px 0 50px;color:var(--dim);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.toastcard{animation:none}html{scroll-behavior:auto}}
+
+@media (max-width:920px){
+  nav.top .links{display:none} nav.top .btn{margin-left:auto}
+  .hero{padding-top:36px}
+  .hero .wrap,.step,.dash{grid-template-columns:1fr;gap:36px}
+  .step.flip .media{order:0}
+  .stage{justify-self:center;max-width:440px}
+  .facts .wrap{grid-template-columns:1fr 1fr}
+  .grid{grid-template-columns:1fr}
+  section{padding:68px 0}
+  .step{margin-bottom:68px}
+  .media{min-height:0}
+  .t1{right:0}
+}
 </style>
 </head>
-<body><div class="wrap">
-  <div class="logo"><img src="favicon.svg" alt="">Dinedot</div>
-  <h1>One QR on every table. <em>The whole restaurant</em> in one system.</h1>
-  <p class="lead">Guests scan, browse the menu and order from their phone. The kitchen sees tickets live, waiters see every table and call, and guests split the bill, tip and pay by UPI.</p>
-  <div class="cta"><a class="btn" href="t.html?k=demo-T3" target="_blank">Try it as a guest ↗</a><a class="btn ghost" href="staff.html" target="_blank">Open the staff app ↗</a></div>
-  <p class="tip">Open both side by side, place an order as a guest, and watch it land in the kitchen. The demo is saved only in your browser.</p>
-  <div class="steps">
-    <div class="step"><b>01 · SCAN</b><h3>QR on every table</h3><p>Each table has its own code, printed straight from the app. Replace one in a tap if a photo gets shared.</p></div>
-    <div class="step"><b>02 · MENU</b><h3>Every dish detail</h3><p>Veg / non-veg marks, photos, spice level, allergens, sizes and extras. Veg-only filter and search.</p></div>
-    <div class="step"><b>03 · KITCHEN</b><h3>Live tickets</h3><p>New → Cooking → Ready with timers and notes. One tablet, zero shouting. Guests see each step.</p></div>
-    <div class="step"><b>04 · CALL</b><h3>One tap to call</h3><p>Waiter, water, bill or help. Staff see it on the floor map and tap “On it”.</p></div>
-    <div class="step"><b>05 · PAY</b><h3>Split, tip, UPI</h3><p>Equal split, tip choices, UPI apps open with the amount filled in. Zero payment-gateway fees.</p></div>
-    <div class="step"><b>06 · DASHBOARD</b><h3>All in one view</h3><p>Live orders, tables in use, sales, guest flow by hour, top dishes, kitchen time and ratings.</p></div>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="logo" href="#"><img src="favicon.svg" alt="">Dinedot</a>
+  <div class="links"><a href="#how">How it works</a><a href="#kitchen">Kitchen</a><a href="#owners">For owners</a><a href="#faq">FAQ</a></div>
+  <a class="btn" href="t.html?k=demo-T3" target="_blank">Try the live demo</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <span class="kick">QR table ordering for restaurants</span>
+    <h1>One QR on every table. <em>Your whole restaurant</em> in one system.</h1>
+    <p class="lead">Guests scan, see your full menu with photos, and order from their phone. The kitchen gets the ticket in a second, waiters see every call, and the bill splits and pays by UPI — without a single app download.</p>
+    <div class="cta">
+      <a class="btn" href="t.html?k=demo-T3" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Order as a guest</a>
+      <a class="btn ghost" href="staff.html" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Open the staff app</a>
+    </div>
+    <div class="ticks"><span>No app to install</span><span>UPI with zero fees</span><span>Works on any phone</span></div>
   </div>
-  <footer>Dinedot · QR table ordering</footer>
-</div></body>
+  <div class="stage">
+    <div class="photo"><img src="img/site/qr-scan.jpg" alt="A guest scanning the QR code on a restaurant table"></div>
+    <div class="phone"><img src="img/site/shot-menu.jpg" alt="The guest menu on a phone"></div>
+    <div class="toastcard t1"><i>🔔</i><div><b>New order #561 · T4</b><small>2 × Chicken Biryani · 1 × Chaas</small></div></div>
+    <div class="toastcard t2"><i>✓</i><div><b>Paid by UPI</b><small>T2 · split 3 ways · ₹1,284</small></div></div>
+  </div>
+</div></header>
+
+<div class="facts"><div class="wrap">
+  <div class="fact"><b>Scan → order</b><span>Menu opens in the browser</span></div>
+  <div class="fact"><b>Live kitchen</b><span>Tickets with timers and notes</span></div>
+  <div class="fact"><b>Split · tip · UPI</b><span>Paid straight to your UPI ID</span></div>
+  <div class="fact"><b>One dashboard</b><span>Sales, guest flow, ratings</span></div>
+</div></div>
+
+<section id="how"><div class="wrap">
+  <div class="head reveal"><span class="kick">How it works</span><h2>From scan to paid, in six steps.</h2><p class="lead">Every step is on the guest's own phone, and every step lands on the right staff screen.</p></div>
+
+  <div class="step reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-menu.jpg" alt="Guest menu with dish photos" loading="lazy"></div></div>
+    <div><span class="num">01 · SCAN</span><h3>Each table has its own QR</h3><p class="lead">Guests point their camera at the table card and your menu opens — already knowing which table they're at.</p>
+      <ul><li>Print every table's QR card from the app</li><li>Replace a code in one tap if a photo of it gets shared</li><li>Pause QR ordering any time with one switch</li></ul></div>
+  </div>
+
+  <div class="step flip reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-dish.jpg" alt="Dish details with sizes and extras" loading="lazy"></div></div>
+    <div><span class="num">02 · MENU</span><h3>Every dish, the way you'd describe it</h3><p class="lead">Big photos, veg / non-veg marks, spice level, allergens, sizes and extras. Search and a Veg-only filter for the table that asks.</p>
+      <ul><li>Half / Full and Glass / Jug sizes, each with its own price</li><li>Extras that add to the price — guests can't change what they pay</li><li>Mark a dish sold out and it greys out instantly</li></ul></div>
+  </div>
+
+  <div class="step reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-status.jpg" alt="Live order status with guest Wi-Fi" loading="lazy"></div></div>
+    <div><span class="num">03 · LIVE STATUS</span><h3>Guests watch their order cook</h3><p class="lead">Received → Cooking → Ready → Served, updating by itself. While they wait, your guest Wi-Fi is one tap away.</p>
+      <ul><li>Phone buzzes when the food is ready</li><li>Order more any time — it all goes on one bill</li><li>No “where's my food?” waves across the room</li></ul></div>
+  </div>
+
+  <div class="step flip reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-call.jpg" alt="Call waiter screen" loading="lazy"></div></div>
+    <div><span class="num">04 · CALL</span><h3>One tap to call a waiter</h3><p class="lead">Waiter, water, bill or help. The table lights up red on the floor map, and the guest sees “On the way” the moment someone taps <b>On it</b>.</p>
+      <ul><li>Sound alert on every staff phone</li><li>Who's handling it, and for how long</li><li>Calls close by themselves when the bill is paid</li></ul></div>
+  </div>
+
+  <div class="step reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-bill.jpg" alt="Bill with split, tip and UPI" loading="lazy"></div></div>
+    <div><span class="num">05 · PAY</span><h3>Split, tip and pay by UPI</h3><p class="lead">Guests split equally, pick a tip and choose UPI, cash or card. Google Pay, PhonePe or Paytm opens with each person's share filled in.</p>
+      <ul><li>Money goes straight to your own UPI ID — no gateway fees</li><li>GST and service charge worked out for you</li><li>The waiter confirms with one tap and the table is free</li></ul></div>
+  </div>
+
+  <div class="step flip reveal">
+    <div class="media"><div class="phone"><img src="img/site/shot-review.jpg" alt="Star rating after paying" loading="lazy"></div></div>
+    <div><span class="num">06 · REVIEW</span><h3>Happy guests go to Google. Unhappy ones talk to you.</h3><p class="lead">After paying, guests rate the visit. Four and five stars are invited to post on Google; anything lower comes to you privately, so you can fix it.</p>
+      <ul><li>Every comment shows on your dashboard</li><li>Ratings sit on each bill, by table and time</li></ul></div>
+  </div>
+</div></section>
+
+<section id="kitchen" style="padding-top:0"><div class="wrap">
+  <div class="band reveal"><img src="img/site/kitchen.jpg" alt="A chef reading orders on the kitchen screen" loading="lazy">
+    <div class="in"><span class="kick">For the kitchen</span><h2>No paper tickets. No shouting.</h2>
+      <p>New, Cooking, Ready — three columns on one tablet. Timers turn amber at 10 minutes and red at 20. Guest notes in red, so “no onion” never gets missed. The screen stays awake all service.</p>
+      <div class="chips"><span>Live tickets</span><span>Timers</span><span>Sold-out switch</span><span>Full screen</span><span>Sound alerts</span></div></div>
+  </div>
+  <div class="screen reveal" style="margin-top:28px"><div class="bar"><i></i><i></i><i></i></div><img src="img/site/shot-kitchen.jpg" alt="Kitchen screen with New, Cooking and Ready columns" loading="lazy"></div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="head reveal"><span class="kick">For the floor</span><h2>Every table, at a glance.</h2><p class="lead">The floor map shows who's ordering, what's ready to serve, who wants the bill and who's calling — so waiters go where they're needed.</p></div>
+  <div class="screen reveal"><div class="bar"><i></i><i></i><i></i></div><img src="img/site/shot-floor.jpg" alt="Floor map with table states and calls" loading="lazy"></div>
+  <div class="grid" style="margin-top:28px">
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><h3>Take orders yourself</h3><p>For guests who'd rather tell a waiter — same menu, straight to the kitchen, marked “waiter”.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div><h3>Print the bill</h3><p>Thermal-printer-friendly receipt with a UPI QR for the exact amount.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3>Right access for each person</h3><p>Owner, manager, waiter and kitchen logins — each sees only what their job needs.</p></div>
+  </div>
+</div></section>
+
+<section id="owners" style="padding-top:0"><div class="wrap dash">
+  <div class="reveal"><span class="kick">For owners</span><h2 style="margin:12px 0 14px">Your restaurant, in one view.</h2>
+    <p class="lead">Live orders, tables in use, today's sales and guests, guest flow by hour, top dishes, kitchen time, how people pay and what they wrote.</p>
+    <div class="roles">
+      <div class="role"><b>Menu</b><span>Add dishes, photos, sizes and extras; reorder sections; mark sold out.</span></div>
+      <div class="role"><b>Bills</b><span>Every paid bill with time, table, staff and rating. CSV for your accountant.</span></div>
+      <div class="role"><b>Settings</b><span>GST, service charge, tips, UPI ID, Wi-Fi, brand colour and cover photo.</span></div>
+    </div></div>
+  <div class="screen reveal"><div class="bar"><i></i><i></i><i></i></div><img src="img/site/shot-dash.jpg" alt="Owner dashboard with sales and guest flow" loading="lazy"></div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="head reveal"><span class="kick">Built for Indian restaurants</span><h2>The details that matter on a busy night.</h2></div>
+  <div class="grid">
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Veg / non-veg marks</h3><p>The green and red symbols guests look for, plus a one-tap Veg-only filter.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 10h18M7 15h1M12 15h4"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg></div><h3>UPI, the way people pay</h3><p>Google Pay, PhonePe and Paytm open with the amount filled in. Cash and card too.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14 0M8.5 16.1a6 6 0 0 1 7 0M12 20h.01"/></svg></div><h3>Guest Wi-Fi built in</h3><p>No more reading out the password — it's on their screen after they order.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg></div><h3>Half / Full portions</h3><p>Sizes with their own prices and extras that add up correctly, every time.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3>No guest data collected</h3><p>We never ask guests for a name, phone or email. Nothing to leak, nothing to manage.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2"/></svg></div><h3>Your brand, your colours</h3><p>Your name, cover photo and brand colour on the guest menu. Light and dark mode.</p></div>
+  </div>
+</div></section>
+
+<section id="faq" style="padding-top:0"><div class="wrap">
+  <div class="head reveal" style="text-align:center;margin-inline:auto"><span class="kick">FAQ</span><h2 style="margin-top:12px">Questions owners ask</h2></div>
+  <div class="faq">
+    <details><summary>Do guests need to download an app?</summary><p>No. The menu opens in the phone's browser straight from the QR code — any Android phone or iPhone.</p></details>
+    <details><summary>Do you take a cut of UPI payments?</summary><p>No. The UPI apps pay straight into your own UPI ID, so there are no gateway fees. The waiter confirms payment with one tap.</p></details>
+    <details><summary>What if a guest would rather order from a waiter?</summary><p>Waiters can take the order on their phone from the same menu. It goes to the same kitchen screen and the same bill.</p></details>
+    <details><summary>Can someone order from home using a photo of the QR?</summary><p>Each table's code can be replaced in one tap, and the old one stops working at once. You can also pause QR ordering for the whole restaurant.</p></details>
+    <details><summary>What do I need to start?</summary><p>A phone or tablet for the kitchen, phones for your waiters, and the QR cards printed from the app. Add your menu and you're ready.</p></details>
+    <details><summary>Is guest data safe?</summary><p>We don't collect any. Orders are linked to a table, not a person. Your staff sign in with their own logins, and each one only sees what their job needs.</p></details>
+  </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="final reveal"><span class="kick">See it for yourself</span><h2 style="margin-top:12px">Open the guest page on your phone and the staff app on your laptop.</h2>
+    <p class="lead">Place an order as a guest and watch it land in the kitchen. The demo restaurant is saved only in your browser.</p>
+    <div class="cta"><a class="btn" href="t.html?k=demo-T3" target="_blank">Order as a guest</a><a class="btn ghost" href="staff.html" target="_blank">Open the staff app</a></div></div>
+</div></section>
+
+<footer><div class="wrap"><a class="logo" href="#"><img src="favicon.svg" alt="">Dinedot</a><span>QR table ordering · Made in Mumbai</span></div></footer>
+
+<script>
+try{const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}}),{rootMargin:"0px 0px -8% 0px"});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));}catch(e){document.querySelectorAll(".reveal").forEach(el=>el.classList.add("in"))}
+</script>
+</body>
 </html>

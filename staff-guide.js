@@ -40,7 +40,7 @@ const GUIDE = [
     <p>Everyone can switch dishes on and off (sold out) with the switch on the right.</p>
     <p>Owners and managers can also:</p>
     <ul><li><b>+ Section</b> (Starters, Mains…) and <b>Edit</b> to rename, reorder or hide a whole section.</li>
-    <li><b>+ Dish</b> or tap a dish: name, price, veg / non-veg / egg, spice, allergens, description and a photo (tap the photo box).</li>
+    <li><b>+ Dish</b> or tap a dish: name, price, veg / non-veg / egg, spice, allergens, description and a photo (tap the photo box). Dishes with photos sell better — guests see them on the menu and full size when they tap a dish.</li>
     <li><b>Sizes</b> (Half / Full, Glass / Jug) each have their own price. <b>Extras</b> add to the price (Extra cheese +₹40).</li>
     <li>Prices are always checked on our side, so a guest can't change what they pay.</li></ul>` },
   { id: "tables", title: "Tables & QR codes", roles: MGR, body: `
@@ -49,7 +49,7 @@ const GUIDE = [
     <li><b>QR</b> next to a table shows its code, a link to open the guest page, and <b>Replace this QR code</b> — use it if a photo of the QR gets shared outside. The old code stops working at once.</li>
     <li>Switching a table off stops orders from its QR. A table with bills on record can't be deleted, only switched off.</li></ul>` },
   { id: "settings", title: "Settings", roles: ["owner"], body: `
-    <ul><li><b>Restaurant</b>: name, short line, welcome note, the message shown when ordering is paused, brand colour for the guest page, Google review link, guest Wi-Fi.</li>
+    <ul><li><b>Restaurant</b>: the <b>cover photo</b> at the top of the guest page (tap the photo box, pick a photo, then <b>Save</b>), name, short line, welcome note, the message shown when ordering is paused, brand colour for the guest page, Google review link, guest Wi-Fi.</li>
     <li><b>Bill & payments</b>: GST %, service charge %, the tip choices guests see, your UPI ID, and which payment ways guests can pick.</li>
     <li><b>Team</b>: add logins, choose access (Owner, Manager, Waiter, Kitchen), switch someone off, set a new password, delete a login. Give passwords in person.</li>
     <li><b>Activity</b>: who cancelled orders, cleared tables, paused ordering, changed settings or logins.</li></ul>
@@ -66,5 +66,6 @@ const GUIDE = [
     <p>Add the staff app to your phone's home screen: in Chrome tap ⋮ → <b>Add to Home screen</b>; on iPhone, Safari → Share → <b>Add to Home Screen</b>.</p>` }
 ];
 const WHATS_NEW = [
+  { date: "10 Nov 2026", text: "Cover photo: add a photo of your restaurant in Settings → Restaurant. It shows at the top of the guest menu." },
   { date: "9 Nov 2026", text: "First version: QR menu and ordering, kitchen screen, floor map with calls, bills with split, tip and UPI, ratings, dashboard, menu and table editor, QR printing, team logins." }
 ];

@@ -315,7 +315,12 @@ const SCREENS = {
     const tabs = [["place", "Restaurant"], ["pay", "Bill & payments"], ["team", "Team"], ["activity", "Activity"]];
     const t = sub || "place";
     let body = loading();
-    if (t === "place" && SET) body = `<form class="card" id="setForm"><div class="formgrid">
+    if (t === "place" && SET) body = `<form class="card" id="setForm">
+        <div class="lbl" style="margin-top:0">Cover photo (top of the guest page)</div>
+        ${SET.cover_url ? `<img class="phototile" src="${esc(SET.cover_url)}" data-coverpick alt="">` : `<div class="phototile" data-coverpick>Add a cover photo — your dining room or a signature dish</div>`}
+        <input type="file" id="coverIn" accept="image/*" hidden><input type="hidden" name="cover_url" value="${esc(SET.cover_url || "")}">
+        ${SET.cover_url ? `<button type="button" class="btn ghost sm" style="margin-top:8px" data-rmcover>Remove cover photo</button>` : ""}
+        <div class="formgrid">
         <label class="field"><span>Restaurant name</span><input class="in" name="restaurant_name" value="${esc(SET.restaurant_name)}" required maxlength="60"></label>
         <label class="field"><span>Short line under the name</span><input class="in" name="tagline" value="${esc(SET.tagline)}" maxlength="80"></label>
         <label class="field full"><span>Welcome note on the guest page</span><input class="in" name="welcome_note" value="${esc(SET.welcome_note)}" maxlength="160"></label>
@@ -719,11 +724,19 @@ document.addEventListener("click", async e => {
     try { const tok = await API.rpc("owner_new_token", { p_id: d.newtoken }); TOKENS[d.newtoken] = tok; qrDrawer(d.newtoken); toast("New QR code ready — print it"); } catch(err){ fail(err); } return; }
 
   /* settings + team */
+  if (d.coverpick !== undefined) { $("coverIn").click(); return; }
+  if (d.rmcover !== undefined) { const f = $("setForm"); API.removePhoto(f.cover_url.value); f.cover_url.value = ""; SET.cover_url = ""; paint(); toast("Cover removed — tap Save"); return; }
   if (d.settab) { location.hash = "settings/" + d.settab; return; }
   if (d.newstaff !== undefined) return staffDrawer(null);
   if (d.staff) return staffDrawer(d.staff);
   if (d.setpw) { const pw = $("newPw").value; try { await API.teamAdmin({ action: "password", id: d.setpw, password: pw }); toast("Password set — tell them in person"); $("newPw").value = ""; } catch(err){ fail(err); } return; }
   if (d.delstaff) { if (!confirmTap("ds", el)) return; try { await API.teamAdmin({ action: "delete", id: d.delstaff }); closeDrawer(); toast("Login deleted"); load("settings"); } catch(err){ fail(err); } return; }
+});
+document.addEventListener("change", async e => {
+  if (e.target.id !== "coverIn") return; const f = e.target.files[0]; if (!f) return; toast("Uploading cover…");
+  try { const url = await API.uploadPhoto(f, 1600); const form = $("setForm"); SET.cover_url = url;
+    [...form.elements].forEach(x => { if (x.name && x.name !== "cover_url" && x.name in SET) SET[x.name] = x.type === "checkbox" ? x.checked : x.value; });
+    paint(); toast("Cover added — tap Save"); } catch(err){ fail(err); }
 });
 document.addEventListener("input", e => { if (e.target.id === "menuQ") { menuQ = e.target.value; const pos = e.target.selectionStart; paint(); const n = $("menuQ"); n.focus(); n.setSelectionRange(pos, pos); } });
 document.addEventListener("submit", async e => {

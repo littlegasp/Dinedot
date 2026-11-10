@@ -88,8 +88,8 @@ const API = (() => {
       img.src = u;
     });
   }
-  async function uploadPhoto(file){
-    const blob = await shrink(file, DEMO ? 480 : 1000);
+  async function uploadPhoto(file, max){
+    const blob = await shrink(file, DEMO ? 640 : (max || 1000));
     if (DEMO) return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
     await fresh();
     const path = "dish-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7) + ".jpg";

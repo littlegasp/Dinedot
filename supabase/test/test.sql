@@ -122,4 +122,12 @@ reset role;
 set role anon;
 select pg_temp.expect_fail(format('select public.guest_order(%L, %L::jsonb)', :'t1', json_build_array(json_build_object('id', :'naan', 'qty', 1))), 'kitchen is closed');
 reset role;
+-- 0002 cover photo
+set role authenticated; set request.jwt.claim.sub = '10000000-0000-4000-8000-000000000001';
+select public.owner_save_settings('{"cover_url": "https://x.supabase.co/storage/v1/object/public/menu-photos/c.jpg"}');
+select pg_temp.expect_fail('select public.owner_save_settings(''{"cover_url": "javascript:alert(1)"}'')', 'uploaded photo');
+reset role;
+select (public.guest_menu(:'t1') -> 'place' ->> 'cover') like 'https://%' as cover_ok \gset
+\if :cover_ok \else \echo 'cover missing' \quit \endif
+\echo COVER TESTS PASSED
 \echo ALL TESTS PASSED

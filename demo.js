@@ -5,7 +5,7 @@
    When no staff tab is open, a pretend kitchen moves orders along by itself.
    ========================================================= */
 const Demo = (() => {
-  const KEY = "dd.demo.v1", HB = "dd.demo.hb", WHO = "dd.demo.user";
+  const KEY = "dd.demo.v2", HB = "dd.demo.hb", WHO = "dd.demo.user";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "d" + Math.random().toString(36).slice(2) + Date.now().toString(36));
   const now = () => new Date().toISOString();
   const ago = s => new Date(Date.now() - s * 1000).toISOString();
@@ -48,7 +48,7 @@ const Demo = (() => {
       I("c5", "Gulab Jamun", "Two warm dumplings in rose syrup", 140, "veg", null, ["Dairy", "Gluten", "Nuts"], [], [{ name: "Vanilla scoop", price: 60 }]),
       I("c5", "Kulfi Falooda", "Malai kulfi, vermicelli, basil seeds, rose", 180, "veg", null, ["Dairy", "Nuts"], [], [])
     ];
-    items.forEach((x, i) => x.sort = i + 1);
+    items.forEach((x, i) => { x.sort = i + 1; x.photo_url = "img/menu/" + x.name.toLowerCase().replace(/[^a-z]+/g, "-") + ".jpg"; });
     items.find(x => x.name === "Tandoori Prawns").available = false;
     const tables = ["T1","T2","T3","T4","T5","T6","T7","T8"].map((c, i) => ({ id: "t" + (i + 1), code: c, name: "", area: i < 6 ? "Main" : "Terrace",
       seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c }));
@@ -56,7 +56,7 @@ const Demo = (() => {
       accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
       gst_pct: 5, service_pct: 0, tip_options: [0, 5, 10], pay_cash: true, pay_card: true, pay_upi: true,
-      google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", updated_at: now() };
+      google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", cover_url: "img/cover.jpg", updated_at: now() };
     const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], no: 100,
       staff: TEAM.map(t => Object.assign({ phone: "", active: true, created_at: ago(86400 * 60) }, t)) };
 
@@ -200,7 +200,7 @@ const Demo = (() => {
   const F = {
     guest_menu({ p_token }){ const t = tableBy(p_token), s = db.settings;
       return { table: { code: t.code, name: t.name || "Table " + t.code },
-        place: { name: s.restaurant_name, tagline: s.tagline, currency: s.currency, accent: s.accent, accepting: s.accepting_orders, closed_message: s.closed_message,
+        place: { name: s.restaurant_name, tagline: s.tagline, currency: s.currency, accent: s.accent, cover: s.cover_url || "", accepting: s.accepting_orders, closed_message: s.closed_message,
           welcome: s.welcome_note, gst_pct: s.gst_pct, service_pct: s.service_pct, tips: s.tip_options,
           pay: { upi: s.pay_upi && !!s.upi_id, cash: s.pay_cash, card: s.pay_card }, has_wifi: !!s.wifi_name, review_url: s.google_review_url },
         categories: db.categories.filter(c => c.active && db.items.some(i => i.category_id === c.id)).sort((a, b) => a.sort - b.sort).map(c => ({ id: c.id, name: c.name })),
@@ -330,9 +330,11 @@ const Demo = (() => {
     owner_settings(){ need(role()); return clone(db.settings); },
     owner_save_settings({ p }){ need(isManager()); if (role() !== "owner" && Object.keys(p).some(k => k !== "accepting_orders")) err("Only the owner can change settings.");
       if (p.accent && !/^#[0-9A-Fa-f]{6}$/.test(p.accent)) err("Pick a colour.");
+      if (p.cover_url && !/^(https:\/\/|img\/|data:image\/)/.test(p.cover_url)) err("The cover photo must be an uploaded photo.");
       if (p.gst_pct != null && (+p.gst_pct < 0 || +p.gst_pct > 28)) err("GST must be between 0 and 28%.");
       if (p.service_pct != null && (+p.service_pct < 0 || +p.service_pct > 20)) err("Service charge must be between 0 and 20%.");
       Object.keys(p).forEach(k => { if (k in db.settings && p[k] != null && !(k === "restaurant_name" && !String(p[k]).trim())) db.settings[k] = ["gst_pct", "service_pct"].includes(k) ? +p[k] : p[k]; });
+      if ("cover_url" in p && !("cover_url" in db.settings)) db.settings.cover_url = p.cover_url;
       if ("accepting_orders" in p) log(p.accepting_orders ? "orders_on" : "orders_off", ""); else log("settings_changed", "");
       db.settings.updated_at = now(); save(); return null; },
     owner_report({ p_from, p_to }){ need(isManager());
