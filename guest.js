@@ -73,9 +73,10 @@ function shell(){
   const p = M.place;
   $("app").innerHTML = `
     ${API.DEMO ? `<div class="demo-band">Demo · <a href="t.html?k=demo-T3">T3</a> · <a href="t.html?k=demo-T5">T5</a> · <a href="staff.html" target="_blank">Open staff app ↗</a></div>` : ""}
-    <header class="hero">
-      <div class="hero-top"><span class="table-chip">${esc(M.table.name)}</span></div>
-      <h1>${esc(p.name)}</h1>${p.tagline ? `<p>${esc(p.tagline)}</p>` : ""}
+    <header class="hero ${p.cover ? "has-cover" : ""}">
+      ${p.cover ? `<div class="cover"><img src="${esc(p.cover)}" alt="" fetchpriority="high"><i class="shade"></i></div>` : ""}
+      <div class="hero-in"><div class="hero-top"><span class="table-chip">${esc(M.table.name)}</span></div>
+      <h1>${esc(p.name)}</h1>${p.tagline ? `<p>${esc(p.tagline)}</p>` : ""}</div>
     </header>
     ${!p.accepting ? `<div class="notice closed">${esc(p.closed_message)}</div>` : p.welcome ? `<div class="notice">${esc(p.welcome)}</div>` : ""}
     <div id="live"></div>
