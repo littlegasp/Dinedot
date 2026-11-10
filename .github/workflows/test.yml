@@ -60,7 +60,7 @@ jobs:
       - name: Demo journey (390 and 1440 px)
         working-directory: web
         run: |
-          npx next build
+          npm run build
           python3 -m http.server 8792 -d out >/dev/null 2>&1 &
           sleep 2
           node tests/journey.mjs && WIDTH=390 node tests/journey.mjs

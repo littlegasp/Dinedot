@@ -21,7 +21,7 @@ update memberships set active = true where user_id = '50000000-0000-4000-8000-00
 update settings set restaurant_name = 'The Copper Pot', upi_id = 'copperpot@okicici', upi_name = 'The Copper Pot';
 SQL
 ANON=$(node -e "const c=require('crypto');const b=o=>Buffer.from(JSON.stringify(o)).toString('base64url');const h=b({alg:'HS256',typ:'JWT'}),p=b({role:'anon',exp:4102444800});console.log(h+'.'+p+'.'+c.createHmac('sha256',process.argv[1]).update(h+'.'+p).digest('base64url'))" "$SECRET")
-NEXT_PUBLIC_SUPABASE_URL="http://localhost:$PORT" NEXT_PUBLIC_SUPABASE_KEY="$ANON" npx next build >/dev/null
+NEXT_PUBLIC_SUPABASE_URL="http://localhost:$PORT" NEXT_PUBLIC_SUPABASE_KEY="$ANON" npm run build >/dev/null
 rm -rf out-real && cp -r out out-real
 cat > /tmp/dd_pgrst.conf <<CONF
 db-uri = "postgres://dd_authenticator:auth-pass@${PGHOST:-localhost}:${PGPORT:-5432}/$DB"
