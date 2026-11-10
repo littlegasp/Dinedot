@@ -244,7 +244,13 @@ const Demo = (() => {
       else db.reviews.push({ id: uid(), visit_id: v.id, table_id: t.id, stars: p_stars, comment: String(p_comment || "").slice(0, 600), created_at: now() });
       save(); return { ok: true }; },
 
-    staff_me(){ const m = me(); return m ? { id: m.id, name: m.name, email: m.email, role: m.role, active: m.active } : null; },
+    staff_me(){ const m = me(); return m ? { id: m.id, name: m.name, email: m.email, role: m.role, active: m.active,
+      restaurant_id: "demo", restaurant: db.settings.restaurant_name, restaurants: 1 } : null; },
+    /* 0004: the demo is one restaurant */
+    staff_restaurants(){ const m = me(); return m ? [{ id: "demo", name: db.settings.restaurant_name, role: m.role, active: m.active, current: true }] : []; },
+    staff_switch_restaurant({ p_restaurant }){ if (p_restaurant !== "demo" || !role()) err("You don't have access to this."); return F.staff_me(); },
+    create_restaurant(){ err("The demo has one restaurant. Connect your own database to add more."); },
+    owner_controls_login(){ need(role() === "owner"); return true; },
     staff_live(){ need(role()); localStorage.setItem(HB, String(Date.now())); const s = db.settings, today = dayKey(new Date());
       const paidToday = db.visits.filter(v => v.status === "paid" && dayKey(v.paid_at) === today);
       const flow = {}; db.visits.filter(v => v.status !== "void" && dayKey(v.opened_at) === today).forEach(v => { const h = new Date(v.opened_at).getHours(); flow[h] = (flow[h] || 0) + 1; });

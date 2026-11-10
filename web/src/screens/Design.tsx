@@ -41,7 +41,7 @@ export function DesignScreen() {
         <Card>
           <CardHeader title="Status" sub="Always a word and an icon, never colour alone" />
           <div className="flex flex-wrap gap-2 px-5 pb-5">
-            {(["free", "seated", "ordered", "food", "bill", "cleaning"] as const).map(s => <TableStatus key={s} state={s} />)}
+            {(["free", "ordered", "food", "bill"] as const).map(s => <TableStatus key={s} state={s} />)}
             {(["new", "cooking", "ready"] as const).map(s => <TicketStatus key={s} status={s} />)}
             <Badge><Diet diet="veg" />Veg</Badge><Badge><Diet diet="nonveg" />Non-veg</Badge><Badge><Diet diet="egg" />Egg</Badge>
           </div>

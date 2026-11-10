@@ -1,102 +1,161 @@
 "use client";
 import * as React from "react";
-import { ArrowLeft, BellRing, Check, ChefHat, Clock, Flame, Minus, Plus, Receipt, Search, ShoppingBag, Wifi } from "lucide-react";
+import { BellRing, Check, ChefHat, Clock, Droplets, Flame, Minus, Plus, Receipt, Search, ShoppingBag, Smartphone, Star, UtensilsCrossed, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Diet } from "@/components/ui/primitives";
-import { Sheet, toast } from "@/components/ui/overlay";
-import { CATEGORIES, MENU } from "@/lib/mock";
-import { billOf, type Line } from "@/lib/bill";
+import { Dialog, Sheet, toast, Toaster } from "@/components/ui/overlay";
+import { newRequestId, rpc } from "@/lib/api";
+import type { CartLine, GuestMenu, GuestState } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
 
-/** Guest page (scanned from the table QR). No sign-in, no name, phone or email, ever. */
-export function GuestScreen({ onExit }: { onExit: () => void }) {
-  const [cart, setCart] = React.useState<Record<string, number>>({});
-  const [veg, setVeg] = React.useState(false);
-  const [cat, setCat] = React.useState<string>(CATEGORIES[0]);
-  const [open, setOpen] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
-  const [step, setStep] = React.useState(0);
-  const lines: Line[] = Object.entries(cart).map(([id, qty]) => { const d = MENU.find(m => m.id === id)!; return { id, dish: id, name: d.name, qty, price: d.price }; });
-  const count = lines.reduce((s, l) => s + l.qty, 0);
-  const bill = billOf(lines);
-  const set = (id: string, n: number) => setCart(c => { const q = (c[id] ?? 0) + n; const x = { ...c }; if (q <= 0) delete x[id]; else x[id] = q; return x; });
+type Item = GuestMenu["items"][number];
+const read = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) as T : d; } catch { return d; } };
+const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-  React.useEffect(() => { if (!sent) return; const t = setInterval(() => setStep(s => Math.min(s + 1, 2)), 2500); return () => clearInterval(t); }, [sent]);
+/** Guest page, opened from the table's QR. No sign-in and no name, phone or email, ever. */
+export function GuestScreen() {
+  const [token, setToken] = React.useState<string | null>(null);
+  const [menu, setMenu] = React.useState<GuestMenu | null>(null);
+  const [state, setState] = React.useState<GuestState | null>(null);
+  const [fatal, setFatal] = React.useState("");
+  const [cart, setCart] = React.useState<CartLine[]>([]);
+  const [veg, setVeg] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const [cat, setCat] = React.useState("");
+  const [pick, setPick] = React.useState<Item | null>(null);
+  const [basket, setBasket] = React.useState(false);
+  const [billOpen, setBillOpen] = React.useState(false);
+  const [note, setNote] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const request = React.useRef<string | null>(null);
+  const cartKey = token ? `dineos.cart.${token}` : "";
+
+  React.useEffect(() => { setToken(new URLSearchParams(location.search).get("k")); }, []);
+  React.useEffect(() => {
+    if (token === null) return;
+    if (!token) { setFatal("This page opens from the QR code on your table."); return; }
+    rpc<GuestMenu>("guest_menu", { p_token: token }).then(m => { setMenu(m); setCat(m.categories[0]?.id ?? ""); document.title = m.place.name; })
+      .catch(e => setFatal((e as Error).message));
+    setCart(read<CartLine[]>(`dineos.cart.${token}`, []));
+  }, [token]);
+  const poll = React.useCallback(() => token ? rpc<GuestState>("guest_state", { p_token: token }).then(setState).catch(() => {}) : Promise.resolve(), [token]);
+  React.useEffect(() => {
+    if (!menu) return;
+    poll(); const t = setInterval(() => { if (document.visibilityState === "visible") poll(); }, 5000);
+    return () => clearInterval(t);
+  }, [menu, poll]);
+  React.useEffect(() => { if (cartKey) write(cartKey, cart); request.current = null; }, [cart, cartKey]);
+
+  if (fatal) return <Center><UtensilsCrossed className="mx-auto mb-3 size-8 text-fg-2" /><p className="font-display text-lg font-bold text-fg">{fatal}</p></Center>;
+  if (!menu) return <Center><p className="text-sm text-fg-2">Opening the menu…</p></Center>;
+
+  const p = menu.place;
+  const visit = state?.visit ?? null;
+  const count = cart.reduce((s, l) => s + l.qty, 0);
+  const cartTotal = cart.reduce((s, l) => s + l.unit * l.qty, 0);
+  const shown = menu.items.filter(i => (!veg || i.diet === "veg") && (q.trim() ? i.name.toLowerCase().includes(q.trim().toLowerCase()) : i.cat === cat));
+  const inCart = (id: string) => cart.filter(l => l.id === id).reduce((s, l) => s + l.qty, 0);
+
+  const add = (i: Item, size?: { name: string; price: number }, addons: { name: string; price: number }[] = []) => {
+    const unit = Number(size?.price ?? i.price) + addons.reduce((s, a) => s + Number(a.price), 0);
+    const key = [i.id, size?.name ?? "", ...addons.map(a => a.name).sort()].join("|");
+    setCart(c => c.some(l => l.key === key) ? c.map(l => l.key === key ? { ...l, qty: l.qty + 1 } : l)
+      : [...c, { key, id: i.id, name: i.name, qty: 1, size: size?.name, addons: addons.map(a => a.name), unit }]);
+  };
+  const tap = (i: Item) => (i.sizes.length || i.addons.length) ? setPick(i) : add(i);
+  const less = (id: string) => setCart(c => { const l = [...c].reverse().find(x => x.id === id); return !l ? c : c.flatMap(x => x !== l ? [x] : x.qty > 1 ? [{ ...x, qty: x.qty - 1 }] : []); });
+  const qty = (key: string, n: number) => setCart(c => c.flatMap(l => l.key !== key ? [l] : l.qty + n <= 0 ? [] : [{ ...l, qty: l.qty + n }]));
+
+  const send = async () => {
+    setBusy(true); request.current ??= newRequestId();
+    try {
+      await rpc("guest_order", { p_token: token, p_note: note.trim(), p_request_id: request.current,
+        p_items: cart.map(l => ({ id: l.id, qty: l.qty, size: l.size ?? "", addons: l.addons ?? [] })) });
+      setCart([]); setNote(""); setBasket(false); toast("Order sent to the kitchen"); poll();
+    } catch (e) { toast((e as Error).message, "error"); }   // the same request id is reused if they tap Send again
+    finally { setBusy(false); }
+  };
+  const call = async (kind: "waiter" | "water") => {
+    try { const r = await rpc<{ already: boolean }>("guest_call", { p_token: token, p_kind: kind });
+      toast(r.already ? "Already asked. Someone is on the way." : kind === "water" ? "Water is on its way" : "A waiter is on the way"); poll(); }
+    catch (e) { toast((e as Error).message, "error"); }
+  };
 
   return (
-    <div className="min-h-dvh bg-[#e9ebef] lg:py-8 [:root[data-theme=dark]_&]:bg-[#0a0c10]">
-      <button onClick={onExit} className="fixed left-4 top-4 z-40 hidden items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-[var(--shadow)] lg:flex"><ArrowLeft className="size-4" />Back to staff screens</button>
-      <div className="relative mx-auto min-h-dvh max-w-[430px] overflow-hidden bg-background lg:min-h-[860px] lg:rounded-[32px] lg:border lg:border-border lg:shadow-[var(--shadow)]">
-        {/* Cover */}
-        <div className="relative h-[210px]">
+    <div className="min-h-dvh bg-background" style={{ ["--coral" as string]: p.accent || undefined }}>
+      <div className="relative mx-auto min-h-dvh max-w-[480px] bg-background">
+        <div className="relative h-[200px] bg-ink">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="img/cover.jpg" alt="" className="absolute inset-0 size-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#171b24]/90 via-[#171b24]/30 to-transparent" />
-          <button onClick={onExit} aria-label="Back" className="absolute left-4 top-4 grid size-9 place-items-center rounded-full bg-white/90 text-[#171b24] lg:hidden"><ArrowLeft className="size-4" /></button>
+          {p.cover && <img src={p.cover} alt="" className="absolute inset-0 size-full object-cover" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#171b24]/90 via-[#171b24]/35 to-transparent" />
           <div className="absolute inset-x-5 bottom-4 text-white">
-            <p className="text-[12px] font-semibold uppercase tracking-wider text-white/80">Table T3 · Main hall</p>
-            <h1 className="font-display text-[28px] font-extrabold leading-tight">The Copper Pot</h1>
-            <p className="text-[13px] text-white/85">North Indian · Open till 11:30 pm</p>
+            <p className="text-[12px] font-semibold uppercase tracking-wider text-white/80">{menu.table.name}</p>
+            <h1 className="font-display text-[28px] font-extrabold leading-tight">{p.name}</h1>
+            {p.tagline && <p className="text-[13px] text-white/85">{p.tagline}</p>}
           </div>
         </div>
 
-        {/* Quick actions */}
-        <div className="grid grid-cols-3 gap-2 px-4 pt-4">
-          <Quick Icon={BellRing} label="Call waiter" onClick={() => toast("A waiter is on the way")} />
-          <Quick Icon={Wifi} label="Wi-Fi" onClick={() => toast("CopperPot-Guest · password chai2026", "info")} />
-          <Quick Icon={Receipt} label="Ask for bill" onClick={() => toast("Your bill is on its way")} />
-        </div>
+        {!p.accepting && <p className="mx-4 mt-4 rounded-[var(--radius)] bg-warning-soft px-4 py-3 text-sm font-semibold text-warning-strong">{p.closed_message}</p>}
+        {p.welcome && <p className="mx-4 mt-4 text-sm text-fg-2">{p.welcome}</p>}
 
-        {sent && (
-          <div className="mx-4 mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4" aria-live="polite">
-            <p className="text-[13px] font-semibold text-fg-2">Order #214</p>
-            <ol className="mt-3 grid grid-cols-3 gap-2">
-              {[{ l: "Received", I: Check }, { l: "Cooking", I: Flame }, { l: "On its way", I: ChefHat }].map((s, i) => (
-                <li key={s.l} className="grid justify-items-center gap-1.5 text-center">
-                  <span className={cn("grid size-9 place-items-center rounded-full", i <= step ? "bg-coral text-[#171b24]" : "bg-muted text-fg-2")}><s.I className="size-4" aria-hidden /></span>
-                  <span className={cn("text-[12px] font-semibold", i <= step ? "text-fg" : "text-fg-2")}>{s.l}</span>
-                </li>
-              ))}
-            </ol>
+        <div className="grid grid-cols-3 gap-2 px-4 pt-4">
+          <Quick Icon={BellRing} label="Call waiter" onClick={() => call("waiter")} />
+          <Quick Icon={Droplets} label="Water" onClick={() => call("water")} />
+          <Quick Icon={Receipt} label="Bill" onClick={() => visit ? setBillOpen(true) : toast("Order something first", "info")} />
+        </div>
+        {visit?.wifi && (
+          <div className="mx-4 mt-2 flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface px-3 py-2 text-[13px] text-fg">
+            <Wifi className="size-4 shrink-0 text-coral-strong" aria-hidden />
+            <div className="min-w-0"><p className="truncate">Wi-Fi <b>{visit.wifi.name}</b></p>
+              {visit.wifi.password && <p className="truncate text-fg-2">Password <b className="select-all text-fg">{visit.wifi.password}</b></p>}</div>
           </div>
         )}
 
-        {/* Menu */}
+        {visit && visit.orders.length > 0 && <Tracker visit={visit} />}
+        {!visit && state?.last_paid && <Review token={token!} paid={state.last_paid} reviewUrl={p.review_url} onDone={poll} />}
+
         <div className="sticky top-0 z-10 mt-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <div className="relative flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-2" aria-hidden />
-              <input aria-label="Search the menu" placeholder="Search the menu" className="h-10 w-full rounded-full border border-border bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-fg-2" /></div>
+              <input aria-label="Search the menu" value={q} onChange={e => setQ(e.target.value)} placeholder="Search the menu" className="h-10 w-full rounded-full border border-border bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-fg-2" /></div>
             <button role="switch" aria-checked={veg} onClick={() => setVeg(v => !v)} className={cn("flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-3 text-[13px] font-semibold text-fg-2", veg && "border-veg text-veg")}>
               <Diet diet="veg" />Veg only
             </button>
           </div>
-          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-            {CATEGORIES.map(c => <button key={c} onClick={() => setCat(c)} aria-pressed={cat === c}
-              className={cn("h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold text-fg-2", cat === c ? "bg-ink text-surface" : "bg-muted")}>{c}</button>)}
-          </div>
+          {!q.trim() && (
+            <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+              {menu.categories.map(c => <button key={c.id} onClick={() => setCat(c.id)} aria-pressed={cat === c.id}
+                className={cn("h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold text-fg-2", cat === c.id ? "bg-ink text-surface" : "bg-muted")}>{c.name}</button>)}
+            </div>
+          )}
         </div>
 
         <ul className="divide-y divide-border px-4 pb-32">
-          {MENU.filter(d => d.cat === cat && (!veg || d.diet === "veg")).map(d => (
-            <li key={d.id} className={cn("flex gap-3 py-4", d.soldOut && "opacity-55")}>
+          {shown.length === 0 && <li className="py-10 text-center text-sm text-fg-2">Nothing matches.</li>}
+          {shown.map(i => (
+            <li key={i.id} className={cn("flex gap-3 py-4", !i.available && "opacity-55")}>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5"><Diet diet={d.diet} />{d.best && <Badge tone="coral" className="h-5 px-2 text-[11px]">Bestseller</Badge>}</div>
-                <p className="mt-1.5 font-display text-base font-bold text-fg">{d.name}</p>
-                <p className="num text-sm font-semibold text-fg">{inr(d.price)}</p>
-                <p className="mt-1 line-clamp-2 text-[13px] text-fg-2">{d.desc}</p>
+                <div className="flex items-center gap-1.5"><Diet diet={i.diet} />{i.best && <Badge tone="coral" className="h-5 px-2 text-[11px]">Bestseller</Badge>}
+                  {!!i.spice && <span className="text-[11px] text-danger" aria-label={`Spice ${i.spice} of 5`}>{"🌶".repeat(Math.min(i.spice, 3))}</span>}</div>
+                <p className="mt-1.5 font-display text-base font-bold text-fg">{i.name}</p>
+                <p className="num text-sm font-semibold text-fg">{inr(i.sizes[0]?.price ?? i.price)}{i.sizes.length > 1 && <span className="font-normal text-fg-2"> onwards</span>}</p>
+                {i.desc && <p className="mt-1 line-clamp-2 text-[13px] text-fg-2">{i.desc}</p>}
+                {i.allergens.length > 0 && <p className="mt-1 text-[12px] text-fg-2">Contains: {i.allergens.join(", ")}</p>}
               </div>
               <div className="relative w-[118px] shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={d.photo} alt="" loading="lazy" className="aspect-square w-full rounded-[var(--radius-lg)] object-cover" />
+                {i.photo
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={i.photo} alt="" loading="lazy" className="aspect-square w-full rounded-[var(--radius-lg)] object-cover" />
+                  : <div className="aspect-square w-full rounded-[var(--radius-lg)] bg-muted" />}
                 <div className="absolute inset-x-2 -bottom-3">
-                  {d.soldOut ? <span className="block rounded-[var(--radius)] bg-surface py-1.5 text-center text-[12px] font-bold text-fg-2 shadow-[var(--shadow)]">Sold out</span>
-                    : cart[d.id] ? (
+                  {!i.available ? <span className="block rounded-[var(--radius)] bg-surface py-1.5 text-center text-[12px] font-bold text-fg-2 shadow-[var(--shadow)]">Sold out</span>
+                    : inCart(i.id) ? (
                       <div className="flex h-9 items-center justify-between rounded-[var(--radius)] bg-coral text-[#171b24] shadow-[var(--shadow)]">
-                        <button aria-label={`One less ${d.name}`} className="grid h-full w-9 place-items-center" onClick={() => set(d.id, -1)}><Minus className="size-4" /></button>
-                        <span className="num text-sm font-extrabold">{cart[d.id]}</span>
-                        <button aria-label={`One more ${d.name}`} className="grid h-full w-9 place-items-center" onClick={() => set(d.id, 1)}><Plus className="size-4" /></button>
+                        <button aria-label={`One less ${i.name}`} className="grid h-full w-9 place-items-center" onClick={() => less(i.id)}><Minus className="size-4" /></button>
+                        <span className="num text-sm font-extrabold">{inCart(i.id)}</span>
+                        <button aria-label={`One more ${i.name}`} className="grid h-full w-9 place-items-center" onClick={() => tap(i)}><Plus className="size-4" /></button>
                       </div>
-                    ) : <button onClick={() => set(d.id, 1)} className="h-9 w-full rounded-[var(--radius)] border border-border bg-surface text-sm font-extrabold text-coral-strong shadow-[var(--shadow)]">ADD</button>}
+                    ) : <button onClick={() => tap(i)} disabled={!p.accepting} className="h-9 w-full rounded-[var(--radius)] border border-border bg-surface text-sm font-extrabold text-coral-strong shadow-[var(--shadow)] disabled:opacity-60">ADD</button>}
                 </div>
               </div>
             </li>
@@ -104,44 +163,177 @@ export function GuestScreen({ onExit }: { onExit: () => void }) {
         </ul>
 
         {count > 0 && (
-          <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[430px] p-4 lg:absolute">
-            <button onClick={() => setOpen(true)} className="flex h-14 w-full items-center gap-3 rounded-[var(--radius-lg)] bg-ink px-4 text-surface shadow-[var(--shadow)]">
-              <ShoppingBag className="size-5" aria-hidden /><span className="num text-sm font-semibold">{count} item{count > 1 ? "s" : ""} · {inr(bill.subtotal)}</span>
+          <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[480px] p-4">
+            <button onClick={() => setBasket(true)} className="flex h-14 w-full items-center gap-3 rounded-[var(--radius-lg)] bg-ink px-4 text-surface shadow-[var(--shadow)]">
+              <ShoppingBag className="size-5" aria-hidden /><span className="num text-sm font-semibold">{count} item{count > 1 ? "s" : ""} · {inr(cartTotal)}</span>
               <span className="ml-auto font-display text-[15px] font-extrabold">View order</span>
             </button>
           </div>
         )}
 
-        <Sheet open={open} onOpenChange={setOpen} title="Your order" description="Table T3 · Goes straight to the kitchen">
-          <ul className="divide-y divide-border">{lines.map(l => (
-            <li key={l.id} className="flex items-center gap-3 py-3">
-              <span className="flex-1 text-sm font-semibold text-fg">{l.name}</span>
+        <Sheet open={basket} onOpenChange={setBasket} title="Your order" description={`${menu.table.name} · goes straight to the kitchen`}>
+          <ul className="divide-y divide-border">{cart.map(l => (
+            <li key={l.key} className="flex items-center gap-3 py-3">
+              <span className="min-w-0 flex-1 text-sm font-semibold text-fg">{l.name}
+                {(l.size || l.addons?.length) ? <span className="block text-[12px] font-normal text-fg-2">{[l.size, ...(l.addons ?? [])].filter(Boolean).join(", ")}</span> : null}</span>
               <div className="flex items-center rounded-[var(--radius)] border border-border">
-                <button aria-label="Less" onClick={() => set(l.id, -1)} className="grid size-9 place-items-center"><Minus className="size-4" /></button>
+                <button aria-label={`One less ${l.name}`} onClick={() => qty(l.key, -1)} className="grid size-9 place-items-center"><Minus className="size-4" /></button>
                 <span className="num w-5 text-center text-sm font-bold">{l.qty}</span>
-                <button aria-label="More" onClick={() => set(l.id, 1)} className="grid size-9 place-items-center"><Plus className="size-4" /></button>
+                <button aria-label={`One more ${l.name}`} onClick={() => qty(l.key, 1)} className="grid size-9 place-items-center"><Plus className="size-4" /></button>
               </div>
-              <span className="num w-14 text-right text-sm font-semibold text-fg">{inr(l.qty * l.price)}</span>
+              <span className="num w-16 text-right text-sm font-semibold text-fg">{inr(l.qty * l.unit)}</span>
             </li>))}
           </ul>
-          <textarea aria-label="Note for the kitchen" placeholder="Note for the kitchen (less spicy, no onion…)" className="mt-3 h-20 w-full rounded-[var(--radius)] border border-border bg-surface p-3 text-sm text-fg placeholder:text-fg-2" />
-          <dl className="mt-3 grid gap-1 text-[13px]">
-            <div className="flex justify-between"><dt className="text-fg-2">Items</dt><dd className="num text-fg">{inr(bill.subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-fg-2">Service and GST</dt><dd className="num text-fg">{inr(bill.serviceAmt + bill.gstAmt, { paise: true })}</dd></div>
-            <div className="flex justify-between border-t border-border pt-2 text-base font-bold"><dt className="text-fg">Estimated total</dt><dd className="num text-fg">{inr(bill.total)}</dd></div>
-          </dl>
-          <p className="mt-2 flex items-center gap-1.5 text-[12px] text-fg-2"><Clock className="size-3.5" aria-hidden />Usually ready in 15–20 min. Pay at the end by UPI, card or cash.</p>
-          <Button size="xl" variant="primary" className="mt-4 w-full" onClick={() => { setOpen(false); setCart({}); setSent(true); setStep(0); toast("Order sent to the kitchen"); }}>Send to kitchen · {inr(bill.total)}</Button>
+          <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={300} aria-label="Note for the kitchen" placeholder="Note for the kitchen (less spicy, no onion, allergies…)" className="mt-3 h-20 w-full rounded-[var(--radius)] border border-border bg-surface p-3 text-sm text-fg placeholder:text-fg-2" />
+          <div className="mt-3 flex justify-between text-base font-bold"><span className="text-fg">Items</span><span className="num text-fg">{inr(cartTotal)}</span></div>
+          <p className="mt-1 flex items-center gap-1.5 text-[12px] text-fg-2"><Clock className="size-3.5" aria-hidden />GST{p.service_pct ? " and service" : ""} are added on the bill. Pay at the end.</p>
+          <Button size="xl" variant="primary" className="mt-4 w-full" disabled={busy || !p.accepting} onClick={send}>{busy ? "Sending…" : "Send to kitchen"}</Button>
         </Sheet>
+
+        <Dialog open={!!pick} onOpenChange={o => !o && setPick(null)} title={pick?.name ?? ""} description="Choose a size and any extras.">
+          {pick && <Picker i={pick} onAdd={(s, a) => { add(pick, s, a); setPick(null); }} />}
+        </Dialog>
+
+        {visit && <BillSheet open={billOpen} onOpenChange={setBillOpen} token={token!} menu={menu} visit={visit} onDone={poll} />}
       </div>
+      <Toaster />
     </div>
   );
 }
 
+function Center({ children }: { children: React.ReactNode }) {
+  return <div className="grid min-h-dvh place-items-center bg-background px-6 text-center"><div>{children}</div></div>;
+}
 function Quick({ Icon, label, onClick }: { Icon: typeof Wifi; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex h-16 flex-col items-center justify-center gap-1 rounded-[var(--radius-lg)] border border-border bg-surface text-[12px] font-semibold text-fg shadow-[var(--shadow-sm)]">
       <Icon className="size-5 text-coral-strong" aria-hidden />{label}
     </button>
+  );
+}
+
+function Tracker({ visit }: { visit: NonNullable<GuestState["visit"]> }) {
+  const steps = [{ l: "Received", I: Check }, { l: "Cooking", I: Flame }, { l: "Ready", I: ChefHat }];
+  const at = { new: 0, cooking: 1, ready: 2, served: 3, cancelled: -1 } as const;
+  return (
+    <div className="mx-4 mt-4 grid gap-3" aria-live="polite">
+      {visit.orders.filter(o => o.status !== "served").slice(-3).map(o => (
+        <div key={o.id} className="rounded-[var(--radius-lg)] border border-border bg-surface p-4">
+          <p className="text-[13px] font-semibold text-fg-2">Order #{o.no} · {o.items.map(i => `${i.qty}× ${i.name}`).join(", ")}</p>
+          {o.status === "cancelled" ? <p className="mt-2 text-sm font-semibold text-danger">Cancelled{o.cancel_reason ? `: ${o.cancel_reason}` : ""}</p> : (
+            <ol className="mt-3 grid grid-cols-3 gap-2">
+              {steps.map((s, i) => (
+                <li key={s.l} className="grid justify-items-center gap-1.5 text-center">
+                  <span className={cn("grid size-9 place-items-center rounded-full", i <= at[o.status] ? "bg-coral text-[#171b24]" : "bg-muted text-fg-2")}><s.I className="size-4" aria-hidden /></span>
+                  <span className={cn("text-[12px] font-semibold", i <= at[o.status] ? "text-fg" : "text-fg-2")}>{s.l}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      ))}
+      {visit.orders.every(o => o.status === "served") && <p className="rounded-[var(--radius)] bg-success-soft px-4 py-3 text-sm font-semibold text-success">Everything has been served. Enjoy!</p>}
+    </div>
+  );
+}
+
+function Picker({ i, onAdd }: { i: Item; onAdd: (s?: { name: string; price: number }, a?: { name: string; price: number }[]) => void }) {
+  const [size, setSize] = React.useState(i.sizes[i.sizes.length - 1]);
+  const [addons, setAddons] = React.useState<{ name: string; price: number }[]>([]);
+  const price = Number(size?.price ?? i.price) + addons.reduce((s, a) => s + Number(a.price), 0);
+  const Opt = ({ on, onClick, label, price: pr }: { on: boolean; onClick: () => void; label: string; price: string }) => (
+    <button type="button" aria-pressed={on} onClick={onClick} className={cn("flex h-14 items-center justify-between rounded-[var(--radius)] border border-border px-4 text-sm font-semibold text-fg", on && "border-blue bg-blue-soft ring-1 ring-blue")}>
+      {label}<span className="num text-fg-2">{pr}</span></button>
+  );
+  return (
+    <div className="grid gap-4">
+      {i.sizes.length > 0 && <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Size</legend>
+        <div className="grid grid-cols-2 gap-2">{i.sizes.map(s => <Opt key={s.name} on={size?.name === s.name} onClick={() => setSize(s)} label={s.name} price={inr(s.price)} />)}</div></fieldset>}
+      {i.addons.length > 0 && <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Extras</legend>
+        <div className="grid grid-cols-2 gap-2">{i.addons.map(a => { const on = addons.some(x => x.name === a.name); return (
+          <Opt key={a.name} on={on} onClick={() => setAddons(on ? addons.filter(x => x.name !== a.name) : [...addons, a])} label={a.name} price={`+ ${inr(a.price)}`} />); })}</div></fieldset>}
+      <Button size="xl" variant="primary" onClick={() => onAdd(size, addons)}>Add · {inr(price)}</Button>
+    </div>
+  );
+}
+
+function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; token: string; menu: GuestMenu; visit: NonNullable<GuestState["visit"]>; onDone: () => void }) {
+  const p = menu.place;
+  const [split, setSplit] = React.useState(visit.split);
+  const [tip, setTip] = React.useState(visit.tip_pct);
+  const [pay, setPay] = React.useState(visit.pay_choice || (p.pay.upi ? "upi" : p.pay.cash ? "cash" : "card"));
+  const [busy, setBusy] = React.useState(false);
+  const b = visit.bill;
+  const asked = visit.status === "bill";
+  const upiLink = visit.upi ? `upi://pay?${new URLSearchParams({ pa: visit.upi.id, pn: visit.upi.name, am: String(asked ? b.each : b.grand), cu: "INR", tn: `${menu.table.name} bill` })}` : "";
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} title="Your bill" description={menu.table.name}>
+      <ul className="grid gap-1 text-sm">{b.lines.map((l, i) => <li key={i} className="flex justify-between text-fg"><span><span className="num">{l.qty}×</span> {l.name}{l.size && ` · ${l.size}`}</span><span className="num">{inr(l.amount)}</span></li>)}</ul>
+      <dl className="mt-3 grid gap-1 border-t border-border pt-3 text-[13px]">
+        <div className="flex justify-between"><dt className="text-fg-2">Items</dt><dd className="num text-fg">{inr(b.subtotal, { paise: true })}</dd></div>
+        {b.service > 0 && <div className="flex justify-between"><dt className="text-fg-2">Service {b.service_pct}%</dt><dd className="num text-fg">{inr(b.service, { paise: true })}</dd></div>}
+        <div className="flex justify-between"><dt className="text-fg-2">GST {b.gst_pct}%</dt><dd className="num text-fg">{inr(b.gst, { paise: true })}</dd></div>
+        {b.tip > 0 && <div className="flex justify-between"><dt className="text-fg-2">Tip {b.tip_pct}%</dt><dd className="num text-fg">{inr(b.tip)}</dd></div>}
+        <div className="flex justify-between pt-1 text-lg font-extrabold"><dt className="text-fg">Total</dt><dd className="num text-fg">{inr(b.grand)}</dd></div>
+        {b.split > 1 && <div className="flex justify-between font-semibold"><dt className="text-fg-2">{b.split} ways</dt><dd className="num text-fg">{inr(b.each)} each</dd></div>}
+      </dl>
+      {!asked ? (
+        <div className="mt-4 grid gap-4">
+          <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Split the bill</legend>
+            <div className="flex gap-2">{[1, 2, 3, 4, 5, 6].map(n => <Pill key={n} on={split === n} onClick={() => setSplit(n)}>{n === 1 ? "No" : n}</Pill>)}</div></fieldset>
+          {p.tips.some(t => t > 0) && <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Add a tip for the team?</legend>
+            <div className="flex gap-2">{p.tips.map(t => <Pill key={t} on={tip === t} onClick={() => setTip(t)}>{t ? `${t}%` : "No tip"}</Pill>)}</div></fieldset>}
+          <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">How will you pay?</legend>
+            <div className="flex gap-2">{(["upi", "card", "cash"] as const).filter(m => p.pay[m]).map(m => <Pill key={m} on={pay === m} onClick={() => setPay(m)}>{m === "upi" ? "UPI" : m === "card" ? "Card" : "Cash"}</Pill>)}</div></fieldset>
+          <Button size="xl" variant="primary" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { await rpc("guest_bill", { p_token: token, p_split: split, p_tip_pct: tip, p_pay: pay }); toast("Your bill is on its way"); onDone(); }
+            catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); } }}>Ask for the bill</Button>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3">
+          <p className="rounded-[var(--radius)] bg-success-soft px-4 py-3 text-sm font-semibold text-success">A waiter is bringing your bill.</p>
+          {visit.pay_choice === "upi" && upiLink && (
+            <a href={upiLink} className="flex h-14 items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-coral text-base font-bold text-[#171b24]">
+              <Smartphone className="size-5" aria-hidden />Pay {inr(b.split > 1 ? b.each : b.grand)} by UPI
+            </a>
+          )}
+          {visit.pay_choice === "upi" && upiLink && <p className="text-[12px] text-fg-2">Opens your UPI app with the amount filled in, paid straight to {visit.upi!.name}. Show the waiter the payment screen.</p>}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" aria-pressed={on} onClick={onClick} className={cn("h-10 min-w-12 rounded-full border border-border bg-surface px-3 text-sm font-semibold text-fg", on && "border-ink bg-ink text-surface")}>{children}</button>;
+}
+
+function Review({ token, paid, reviewUrl, onDone }: { token: string; paid: NonNullable<GuestState["last_paid"]>; reviewUrl: string; onDone: () => void }) {
+  const [stars, setStars] = React.useState(0);
+  const [comment, setComment] = React.useState("");
+  const [done, setDone] = React.useState(paid.reviewed);
+  if (done) return (
+    <div className="mx-4 mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4 text-center">
+      <p className="font-display text-base font-bold text-fg">Thank you!</p>
+      {reviewUrl && stars >= 4 && <a href={reviewUrl} target="_blank" rel="noopener" className="mt-2 inline-block text-sm font-semibold text-blue">Share it on Google too</a>}
+    </div>
+  );
+  return (
+    <div className="mx-4 mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4">
+      <p className="font-display text-base font-bold text-fg">Thanks for visiting. How was it?</p>
+      <p className="text-[12px] text-fg-2">Paid {inr(paid.total)}. Your rating is anonymous.</p>
+      <div className="mt-3 flex gap-1" role="radiogroup" aria-label="Rating">
+        {[1, 2, 3, 4, 5].map(n => <button key={n} role="radio" aria-checked={stars === n} aria-label={`${n} star${n > 1 ? "s" : ""}`} onClick={() => setStars(n)}>
+          <Star className={cn("size-8", n <= stars ? "fill-coral text-coral" : "text-border-strong")} /></button>)}
+      </div>
+      {stars > 0 && <>
+        <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={600} placeholder="Anything we should know? (optional)" aria-label="Comment"
+          className="mt-3 h-16 w-full rounded-[var(--radius)] border border-border bg-surface p-3 text-sm text-fg placeholder:text-fg-2" />
+        <Button className="mt-2 w-full" variant="primary" onClick={async () => {
+          try { await rpc("guest_review", { p_token: token, p_visit: paid.id, p_stars: stars, p_comment: comment.trim() }); setDone(true); onDone(); }
+          catch (e) { toast((e as Error).message, "error"); } }}>Send</Button>
+      </>}
+    </div>
   );
 }

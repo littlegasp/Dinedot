@@ -14,6 +14,12 @@ QR table ordering for restaurants: guests scan a table QR, order from the menu, 
 - Safety rules (0003): every migration must start from the locked default (`alter default privileges … revoke execute`) and grant each new function explicitly; guests may run only the six `guest_*` functions (tested). Orders carry a `request_id` (idempotent); order status moves only by `order_step_ok()` steps and never on paid/void bills; every payment is a row in `payments` (method, amount, reference); activity log records payments, price/menu changes and split/tip changes via triggers.
 - Money: subtotal → service % on subtotal → GST % on (subtotal + service) → total rounded to the rupee → tip % on subtotal (rounded). Split = ceil(grand / ways). Frozen on the visit when marked paid.
 
+## DineOS app (`web/`, branch `dineos`)
+- Next.js 15 + TypeScript + Tailwind 4, static export: `index.html` = staff app (hash routes `#/today #/pos?table=… #/floor #/kitchen #/design`), `t.html?k=<token>` = guest page (same address as the QR codes). Keys: `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_KEY` (publishable key only); empty = demo.
+- Data: `src/lib/api.ts` (fetch + session, same calls as `api.js`), `src/lib/staff.tsx` (staff_me, staff_restaurants, staff_live every 4 s, `useAction`), shapes in `src/lib/types.ts`. Screens in `src/screens/`. Demo mode loads the shared `demo.js` (copied to `public/legacy/` by `scripts/copy-demo.mjs` before dev/build), so **mirror DB changes in `demo.js` once and both apps get them**.
+- Tests: `node tests/journey.mjs` (demo, `WIDTH=390` for phone) → `DINEOS JOURNEY PASSED`; `tests/real/run.sh` (needs Postgres + `POSTGREST=` v12 binary) runs the built app against the real migrations → `REAL STACK PASSED`. CI job `dineos` runs typecheck, lint, both.
+- Not in the database yet (so not in the app): discounts, takeaway, split tender (one payment row per bill today; "Mixed" + reference), kitchen stations, per-dish done, daily close, team notice.
+
 ## Files
 - `t.html` + `guest.js` + `guest.css` — guest page (`t.html?k=<token>`). Mobile-first, dark by default with a light version; accent colour from Settings.
 - `staff.html` + `staff.js` + `staff.css` + `staff-guide.js` — staff app (hash routes `#dash #floor #kitchen #bills #menu #tables #settings/<tab> #help`). Studio-CRM-family layout (frosted panels, floating sidebar, bottom tab bar on phones, light/dark) in Dinedot colours. Polls `staff_live` every 4 s; sound + toast on new orders and calls.

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predev": "node scripts/copy-demo.mjs",
+    "prebuild": "node scripts/copy-demo.mjs"
   },
   "engines": {
     "node": ">=20"

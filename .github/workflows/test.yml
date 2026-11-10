@@ -34,3 +34,38 @@ jobs:
           python3 -m http.server 8765 >/dev/null 2>&1 &
           sleep 2
           node tests/e2e/flow.mjs
+
+  dineos:
+    # The new DineOS app (web/): type check, lint, build, the demo journey at phone and
+    # desktop width, and the same app against the real migrations through PostgREST.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env: { PGHOST: localhost, PGPORT: "5432", PGUSER: postgres, PGPASSWORD: postgres }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - run: npx tsc --noEmit && npx eslint src
+        working-directory: web
+      - name: Demo journey (390 and 1440 px)
+        working-directory: web
+        run: |
+          npx next build
+          python3 -m http.server 8792 -d out >/dev/null 2>&1 &
+          sleep 2
+          node tests/journey.mjs && WIDTH=390 node tests/journey.mjs
+      - name: Real database journey (PostgREST)
+        working-directory: web
+        run: |
+          curl -sSL https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz | tar xJ -C /tmp
+          POSTGREST=/tmp/postgrest bash tests/real/run.sh

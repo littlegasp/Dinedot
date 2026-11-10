@@ -1,100 +1,84 @@
 "use client";
 import * as React from "react";
-import { AlertTriangle, Check, Clock, Undo2 } from "lucide-react";
+import { AlertTriangle, Clock, Undo2, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge, Segmented } from "@/components/ui/primitives";
-import { toast } from "@/components/ui/overlay";
+import { Badge, Diet, Skeleton } from "@/components/ui/primitives";
 import { TicketStatus } from "@/components/ui/status";
-import { TICKETS, dish, type Station, type Ticket } from "@/lib/mock";
+import { rpc } from "@/lib/api";
+import { minutesSince, useAction, useStaff } from "@/lib/staff";
+import type { Order } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const TARGET = 15; // minutes; set per restaurant
+const TARGET = 15;   // minutes per ticket before it shows as late
 const NEXT = { new: "cooking", cooking: "ready", ready: "served" } as const;
+const BACK = { cooking: "new", ready: "cooking" } as const;
 const ACTION = { new: "Start cooking", cooking: "Mark ready", ready: "Picked up" } as const;
+type Col = keyof typeof NEXT;
 
-/** Kitchen display: always dark (glare-free on a wall screen), large type, big tap targets. */
+/** Kitchen display: always dark (no glare on a wall screen), big type, big buttons. */
 export function KitchenScreen() {
-  const [station, setStation] = React.useState<"All" | Station>("All");
-  const [tickets, setTickets] = React.useState(TICKETS);
+  const { live } = useStaff();
+  const { run, pending } = useAction();
   const [, tick] = React.useState(0);
-  React.useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30000); return () => clearInterval(t); }, []);
+  React.useEffect(() => { const t = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(t); }, []);
 
-  const view = tickets
-    .map(t => ({ ...t, items: t.items.map((it, idx) => ({ ...it, idx })).filter(i => station === "All" || dish(i.dish).station === station) }))
-    .filter(t => t.items.length);
-  const bump = (t: Pick<Ticket, "id" | "no" | "status">) => {
-    const next = NEXT[t.status];
-    if (next === "served") { setTickets(ts => ts.filter(x => x.id !== t.id)); toast(`#${t.no} picked up`); return; }
-    setTickets(ts => ts.map(x => (x.id === t.id ? { ...x, status: next } : x)));
-  };
-  const toggleItem = (tid: string, idx: number) =>
-    setTickets(ts => ts.map(t => (t.id !== tid ? t : { ...t, items: t.items.map((it, i) => (i === idx ? { ...it, done: !it.done } : it)) })));
+  const tickets = (live?.visits ?? []).flatMap(v => v.orders.filter(o => o.status in NEXT).map(o => ({ o, table: live!.tables.find(t => t.id === v.table_id)?.code ?? "" })))
+    .sort((a, b) => a.o.created_at.localeCompare(b.o.created_at));
+  const step = (o: Order, to: string) => run(() => rpc("staff_order_status", { p_order: o.id, p_status: to }));
 
   return (
     <div className="theme-dark min-h-[calc(100dvh-64px)] bg-background px-4 py-5 text-fg lg:px-8">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="flex-1">
-          <h1 className="text-[26px] font-extrabold text-fg">Kitchen</h1>
-          <p className="text-sm text-fg-2">Target {TARGET} min per ticket · tap a dish when it&apos;s plated</p>
-        </div>
-        <Segmented size="lg" value={station} onChange={setStation}
-          options={(["All", "Tandoor", "Curry", "Bar", "Dessert"] as const).map(s => ({ value: s, label: s }))} />
+      <div className="mb-5">
+        <h1 className="text-[26px] font-extrabold text-fg">Kitchen</h1>
+        <p className="text-sm text-fg-2">Oldest first · late after {TARGET} min · updates by itself</p>
       </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {(["new", "cooking", "ready"] as const).map(col => {
-          const list = view.filter(t => t.status === col);
-          return (
-            <section key={col} aria-label={col} className="grid content-start gap-3">
-              <div className="flex items-center gap-2"><TicketStatus status={col} /><span className="num text-sm font-semibold text-fg-2">{list.length}</span></div>
-              {list.map(t => {
-                const late = t.mins >= TARGET && t.status !== "ready";
-                const warn = !late && t.mins >= TARGET * 0.7 && t.status !== "ready";
-                return (
-                  <article key={t.id} className={cn("overflow-hidden rounded-[var(--radius-lg)] border bg-surface",
-                    late ? "border-danger" : warn ? "border-warning" : "border-border")}>
-                    <header className={cn("flex items-center gap-2 px-4 py-3", late ? "bg-danger-soft" : warn ? "bg-warning-soft" : "bg-muted")}>
-                      <span className="font-display text-2xl font-extrabold text-fg">{t.table}</span>
-                      <Badge tone={t.kind === "Takeaway" ? "blue" : "neutral"}>{t.kind}</Badge>
-                      <span className={cn("num ml-auto flex items-center gap-1 text-sm font-bold", late ? "text-danger" : warn ? "text-warning" : "text-fg-2")}>
-                        {late ? <AlertTriangle className="size-4" aria-hidden /> : <Clock className="size-4" aria-hidden />}
-                        {t.mins} min{late && " · late"}
-                      </span>
-                    </header>
-                    <ul className="px-2 py-1">
-                      {t.items.map((it, i) => {
-                        return (
-                          <li key={i}>
-                            <button onClick={() => toggleItem(t.id, it.idx)} aria-pressed={!!it.done}
-                              className="flex min-h-12 w-full items-center gap-3 rounded-[var(--radius)] px-2 py-2 text-left hover:bg-muted">
-                              <span className={cn("grid size-6 shrink-0 place-items-center rounded-md border-2", it.done ? "border-success bg-success text-[#0f1218]" : "border-border-strong")}>
-                                {it.done && <Check className="size-4" aria-hidden />}
-                              </span>
-                              <span className="num w-7 font-display text-xl font-extrabold text-fg">{it.qty}×</span>
-                              <span className={cn("flex-1 text-[17px] font-semibold text-fg", it.done && "text-fg-2 line-through")}>
-                                {dish(it.dish).name}
-                                {(it.mods || it.note) && <span className="block text-[13px] font-medium text-coral-strong no-underline">{[it.mods, it.note].filter(Boolean).join(" · ")}</span>}
-                              </span>
-                            </button>
+      {!live ? <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-64 opacity-30" />)}</div> : (
+        <div className="grid gap-4 md:grid-cols-3">
+          {(["new", "cooking", "ready"] as Col[]).map(col => {
+            const list = tickets.filter(t => t.o.status === col);
+            return (
+              <section key={col} aria-label={col} className="grid content-start gap-3">
+                <div className="flex items-center gap-2"><TicketStatus status={col} /><span className="num text-sm font-semibold text-fg-2">{list.length}</span></div>
+                {list.map(({ o, table }) => {
+                  const mins = minutesSince(o.created_at);
+                  const late = mins >= TARGET && col !== "ready";
+                  const warn = !late && mins >= TARGET * 0.7 && col !== "ready";
+                  return (
+                    <article key={o.id} className={cn("overflow-hidden rounded-[var(--radius-lg)] border bg-surface", late ? "border-danger" : warn ? "border-warning" : "border-border")}>
+                      <header className={cn("flex items-center gap-2 px-4 py-3", late ? "bg-danger-soft" : warn ? "bg-warning-soft" : "bg-muted")}>
+                        <span className="font-display text-2xl font-extrabold text-fg">{table}</span>
+                        <Badge tone="neutral">{o.source === "guest" ? "QR" : "Staff"}</Badge>
+                        <span className={cn("num ml-auto flex items-center gap-1 text-sm font-bold", late ? "text-danger" : warn ? "text-warning" : "text-fg-2")}>
+                          {late ? <AlertTriangle className="size-4" aria-hidden /> : <Clock className="size-4" aria-hidden />}{mins} min{late && " · late"}
+                        </span>
+                      </header>
+                      <ul className="px-4 py-2">
+                        {o.items.map((it, i) => (
+                          <li key={i} className="flex items-start gap-3 py-1.5">
+                            <span className="num w-8 shrink-0 font-display text-xl font-extrabold text-fg">{it.qty}×</span>
+                            <span className="flex-1 text-[17px] font-semibold leading-snug text-fg">
+                              <span className="inline-flex items-center gap-1.5"><Diet diet={it.diet} />{it.name}</span>
+                              {(it.size || it.addons.length > 0 || it.note) && (
+                                <span className="block text-[13px] font-medium text-coral-strong">{[it.size, ...it.addons, it.note].filter(Boolean).join(" · ")}</span>)}
+                            </span>
                           </li>
-                        );
-                      })}
-                    </ul>
-                    {t.allergy && <p className="mx-4 mb-3 flex items-center gap-2 rounded-[var(--radius-sm)] bg-warning-soft px-3 py-2 text-[13px] font-bold text-warning"><AlertTriangle className="size-4" aria-hidden />{t.allergy}</p>}
-                    <footer className="flex gap-2 border-t border-border p-3">
-                      <span className="num self-center text-[12px] text-fg-2">#{t.no}</span>
-                      {t.status !== "new" && <Button size="icon" variant="ghost" aria-label="Move back a step" className="ml-auto"
-                        onClick={() => setTickets(ts => ts.map(x => (x.id === t.id ? { ...x, status: t.status === "ready" ? "cooking" : "new" } : x)))}><Undo2 /></Button>}
-                      <Button size="lg" variant={t.status === "ready" ? "success" : "primary"} className={cn("min-w-[150px]", t.status === "new" && "ml-auto")} onClick={() => bump(t)}>{ACTION[t.status]}</Button>
-                    </footer>
-                  </article>
-                );
-              })}
-              {!list.length && <p className="rounded-[var(--radius-lg)] border border-dashed border-border px-4 py-8 text-center text-sm text-fg-2">Nothing here.</p>}
-            </section>
-          );
-        })}
-      </div>
+                        ))}
+                      </ul>
+                      {o.note && <p className="mx-4 mb-3 flex items-center gap-2 rounded-[var(--radius-sm)] bg-warning-soft px-3 py-2 text-[13px] font-bold text-warning"><AlertTriangle className="size-4 shrink-0" aria-hidden />{o.note}</p>}
+                      <footer className="flex items-center gap-2 border-t border-border p-3">
+                        <span className="num text-[12px] text-fg-2">#{o.no}</span>
+                        {col !== "new" && <Button size="icon" variant="ghost" aria-label="Move back a step" className="ml-auto" disabled={pending} onClick={() => step(o, BACK[col as "cooking" | "ready"])}><Undo2 /></Button>}
+                        <Button size="lg" variant={col === "ready" ? "success" : "primary"} disabled={pending} className={cn("min-w-[150px]", col === "new" && "ml-auto")} onClick={() => step(o, NEXT[col])}>{ACTION[col]}</Button>
+                      </footer>
+                    </article>
+                  );
+                })}
+                {!list.length && <p className="flex flex-col items-center gap-2 rounded-[var(--radius-lg)] border border-dashed border-border px-4 py-8 text-center text-sm text-fg-2"><UtensilsCrossed className="size-5" aria-hidden />Nothing here.</p>}
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

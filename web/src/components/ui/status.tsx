@@ -1,16 +1,21 @@
-import { Armchair, BellRing, CheckCheck, ChefHat, CircleDashed, Flame, Receipt, Sparkles, Utensils } from "lucide-react";
+import { CheckCheck, ChefHat, CircleDashed, Flame, BellRing, Receipt, Utensils } from "lucide-react";
 import { Badge } from "./primitives";
-import type { TableState } from "@/lib/mock";
+import type { LiveTable, LiveVisit } from "@/lib/types";
 
-/** Every status shows a word and an icon, never colour alone. */
-export const TABLE_STATE: Record<TableState, { label: string; tone: "neutral" | "blue" | "warning" | "success" | "coral" | "ink"; Icon: typeof Armchair }> = {
+/** A table's state, worked out from its open visit. Every status shows a word and an icon. */
+export type TableState = "free" | "ordered" | "food" | "bill";
+export const TABLE_STATE: Record<TableState, { label: string; tone: "neutral" | "warning" | "success" | "coral"; Icon: typeof Receipt }> = {
   free: { label: "Free", tone: "neutral", Icon: CircleDashed },
-  seated: { label: "Seated", tone: "blue", Icon: Armchair },
   ordered: { label: "Ordered", tone: "warning", Icon: ChefHat },
   food: { label: "Eating", tone: "success", Icon: Utensils },
   bill: { label: "Bill asked", tone: "coral", Icon: Receipt },
-  cleaning: { label: "Cleaning", tone: "neutral", Icon: Sparkles },
 };
+export function tableState(v: LiveVisit | undefined): TableState {
+  if (!v) return "free";
+  if (v.status === "bill") return "bill";
+  return v.orders.some(o => o.status === "new" || o.status === "cooking") ? "ordered" : "food";
+}
+export const visitOf = (t: LiveTable, visits: LiveVisit[]) => visits.find(v => v.table_id === t.id);
 
 export function TableStatus({ state }: { state: TableState }) {
   const s = TABLE_STATE[state];
