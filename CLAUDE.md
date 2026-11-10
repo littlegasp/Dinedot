@@ -15,7 +15,8 @@ QR table ordering for restaurants: guests scan a table QR, order from the menu, 
 ## Files
 - `t.html` + `guest.js` + `guest.css` — guest page (`t.html?k=<token>`). Mobile-first, dark by default with a light version; accent colour from Settings.
 - `staff.html` + `staff.js` + `staff.css` + `staff-guide.js` — staff app (hash routes `#dash #floor #kitchen #bills #menu #tables #settings/<tab> #help`). Studio-CRM-family layout (frosted panels, floating sidebar, bottom tab bar on phones, light/dark) in Dinedot colours. Polls `staff_live` every 4 s; sound + toast on new orders and calls.
-- `index.html` — product page with demo links. `config.js` — the only per-restaurant file. `vendor/qrcode.js` — qrcode-generator 1.4.4 (MIT).
+- `index.html` — product page (photo hero, six steps with real app screenshots, kitchen/floor/owner sections, FAQ). Screenshots in `img/site/shot-*.jpg` are made by `tools/shots.js` (run with a local server on :8765, then convert PNG→JPG); retake them whenever a guest or staff screen changes.
+- `img/menu/<dish-slug>.jpg` (800 px) and `img/cover.jpg` — demo restaurant photos (made in Canva, Nov 2026); `img/site/` — product page photos and screenshots. `config.js` — the only per-restaurant file. `vendor/qrcode.js` — qrcode-generator 1.4.4 (MIT).
 
 ## Rules
 - **Help guide rule:** every visible staff-app change updates `staff-guide.js` (its section + a `WHATS_NEW` line) in the same commit.

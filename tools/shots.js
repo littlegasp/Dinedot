@@ -9,7 +9,7 @@ const OUT = "img/site/", BASE = "http://localhost:8765/";
   const g = await phone.newPage();
   await g.goto(BASE + "t.html?k=demo-T3"); await g.evaluate(() => localStorage.clear()); await g.reload();
   await g.waitForLoadState("networkidle"); await g.waitForTimeout(600);
-  const hideDemo = () => g.addStyleTag({ content: ".demo-band{display:none!important}" });
+  const hideDemo = () => g.addStyleTag({ content: ".demo-band,.toast,.confetti{display:none!important}" });
   await hideDemo();
   await g.screenshot({ path: OUT + "shot-menu.png" });
   await g.locator(".dish", { hasText: "Chicken Karahi" }).click(); await g.waitForTimeout(500);
@@ -47,11 +47,11 @@ const OUT = "img/site/", BASE = "http://localhost:8765/";
   const p = await lap.newPage();
   await p.goto(BASE + "staff.html"); await p.evaluate(() => localStorage.clear()); await p.reload();
   await p.click('[data-demo="owner@demo"]'); await p.waitForTimeout(1500);
-  await p.addStyleTag({ content: ".demo-band{display:none!important}" });
+  await p.addStyleTag({ content: ".demo-band,.toast{display:none!important}" });
   await p.screenshot({ path: OUT + "shot-dash.png" });
   for (const [r, f] of [["floor", "shot-floor"], ["kitchen", "shot-kitchen"]]) {
     await p.goto(BASE + "staff.html#" + r); await p.waitForTimeout(900);
-    await p.addStyleTag({ content: ".demo-band{display:none!important}" });
+    await p.addStyleTag({ content: ".demo-band,.toast{display:none!important}" });
     await p.screenshot({ path: OUT + f + ".png" });
   }
   await b.close();
