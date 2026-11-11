@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { ChefHat, Crown, LogIn, Store, UserRound, Utensils } from "lucide-react";
+import { ChefHat, Crown, LogIn, Store, UserRound, Utensils, Wallet } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Card, Field, Input } from "@/components/ui/primitives";
@@ -10,6 +10,7 @@ import { useStaff } from "@/lib/staff";
 const DEMO_LOGINS = [
   { email: "owner@demo", name: "Meera", role: "Owner", Icon: Crown },
   { email: "manager@demo", name: "Sana", role: "Manager", Icon: Store },
+  { email: "cashier@demo", name: "Tara", role: "Cashier", Icon: Wallet },
   { email: "waiter@demo", name: "Ravi", role: "Waiter", Icon: Utensils },
   { email: "kitchen@demo", name: "Chef Imran", role: "Kitchen", Icon: ChefHat },
 ];

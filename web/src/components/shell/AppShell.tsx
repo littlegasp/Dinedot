@@ -5,10 +5,13 @@ import { Bell, BellRing, Building2, Droplets, LayoutGrid, LifeBuoy, Lock, LogOut
 import { NAV, type Route } from "@/lib/routes";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/primitives";
+import { Kbd, Switch } from "@/components/ui/primitives";
 import { Dialog, Sheet, toast } from "@/components/ui/overlay";
 import { useStaff, minutesSince, useAction } from "@/lib/staff";
 import { rpc } from "@/lib/api";
+import { useOutbox } from "@/lib/outbox";
+import { Tour } from "./Tour";
+import { useAlerts, useAlertSettings, useWakeLock } from "@/lib/alerts";
 import { cn } from "@/lib/utils";
 
 export { NAV, HOME, type Route } from "@/lib/routes";
@@ -60,11 +63,15 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
   route: Route; go: (r: Route) => void; children: React.ReactNode;
   title: string; sub?: React.ReactNode; actions?: React.ReactNode; bleed?: boolean;
 }) {
-  const { me, live, role, restaurants, demo, offline, signOut, reloadMe } = useStaff();
+  const { me, live, role, restaurants, demo, offline, signOut, reloadMe, reload } = useStaff();
+  const outbox = useOutbox(route === "pos" ? null : me?.restaurant_id, (m, ok) => { toast(m, ok ? "ok" : "error"); reload(); });   // the POS runs its own
   const { run } = useAction();
   const { theme, toggle } = useTheme();
   const [cmd, setCmd] = React.useState(false);
   const [bell, setBell] = React.useState(false);
+  useAlerts(live, role, route === "kitchen");
+  useWakeLock(route === "kitchen");
+  const alerts = useAlertSettings();
   const stale = useNewVersion();
   const nav = NAV.filter(n => role && n.roles.includes(role));
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -145,6 +152,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
       {offline && (
         <div role="status" className="flex items-center gap-2 bg-warning-soft px-4 py-2 text-[13px] font-semibold text-warning-strong lg:px-8">
           <WifiOff className="size-4" aria-hidden />No internet. The screen will catch up as soon as the connection is back.
+          {outbox.jobs.length > 0 && ` ${outbox.jobs.length} order${outbox.jobs.length > 1 ? "s" : ""} saved on this device will be sent then.`}
         </div>
       )}
       {live?.settings.day_closed && (
@@ -182,6 +190,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
             {actions}
           </div>
         )}
+        {me && <div className={cn(bleed && "px-4 pt-5 lg:px-8")}><Tour user={me.id} route={route} /></div>}
         {children}
       </main>
 
@@ -231,6 +240,21 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
             ); })}
           </ul>
         )}
+        <div className="mt-4 grid gap-2 border-t border-border pt-4">
+          <p className="text-[13px] font-semibold text-fg">Alerts on this device</p>
+          <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
+            <span><span className="block text-sm font-semibold text-fg">Sound</span>
+              <span className="text-[12px] text-fg-2">{role === "kitchen" ? "A chime for every new order." : "A chime when a table calls or food is ready to serve."}</span></span>
+            <Switch checked={alerts.sound} onChange={alerts.setSound} label="Sound alerts" />
+          </label>
+          {alerts.perm !== "unsupported" && (
+            <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
+              <span><span className="block text-sm font-semibold text-fg">Notifications</span>
+                <span className="text-[12px] text-fg-2">{alerts.perm === "granted" ? "On. You'll get one while DineOS is open in the background." : alerts.perm === "denied" ? "Blocked in this browser's site settings." : "Show a notification while DineOS is in the background."}</span></span>
+              {alerts.perm === "default" && <Button size="sm" onClick={alerts.askNotify}>Turn on</Button>}
+            </div>
+          )}
+        </div>
       </Dialog>
 
       <Dialog open={cmd} onOpenChange={setCmd} title="Search" className="p-0 [&>div:first-child]:hidden">

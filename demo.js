@@ -5,7 +5,7 @@
    When no staff tab is open, a pretend kitchen moves orders along by itself.
    ========================================================= */
 const Demo = (() => {
-  const KEY = "dd.demo.v3", HB = "dd.demo.hb", WHO = "dd.demo.user";
+  const KEY = "dd.demo.v4", HB = "dd.demo.hb", WHO = "dd.demo.user";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "d" + Math.random().toString(36).slice(2) + Date.now().toString(36));
   const now = () => new Date().toISOString();
   const ago = s => new Date(Date.now() - s * 1000).toISOString();
@@ -16,6 +16,7 @@ const Demo = (() => {
   const TEAM = [
     { id: "u-owner", name: "Meera", email: "owner@demo", role: "owner" },
     { id: "u-manager", name: "Sana", email: "manager@demo", role: "manager" },
+    { id: "u-cashier", name: "Tara", email: "cashier@demo", role: "cashier" },
     { id: "u-waiter", name: "Ravi", email: "waiter@demo", role: "waiter" },
     { id: "u-kitchen", name: "Chef Imran", email: "kitchen@demo", role: "kitchen" }
   ];
@@ -59,7 +60,10 @@ const Demo = (() => {
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
       gst_pct: 5, service_pct: 0, tip_options: [0, 5, 10], pay_cash: true, pay_card: true, pay_upi: true,
       google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", cover_url: "img/cover.jpg",
-      stations: ["Tandoor", "Curry", "Bar"], max_discount_pct: 20, team_notice: "", team_notice_at: null, team_notice_by: "", updated_at: now() };
+      stations: ["Tandoor", "Curry", "Bar"], max_discount_pct: 20, team_notice: "", team_notice_at: null, team_notice_by: "",
+      legal_name: "Copper Pot Foods LLP", bill_address: "Shop 4, Saki Vihar Road, Andheri East, Mumbai 400072", gstin: "27ABCDE1234F1Z5",
+      fssai: "11521998000123", sac: "996331", gst_composition: false, invoice_prefix: "CP", bill_footer: "Thank you! Please visit again.", receipt_width: 80,
+      updated_at: now() };
     const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], payments: [], closes: [], no: 100, oi: 0, token: 0, token_day: "",
       staff: TEAM.map(t => Object.assign({ phone: "", active: true, created_at: ago(86400 * 60) }, t)) };
 
@@ -112,6 +116,8 @@ const Demo = (() => {
       { guests: 4, status: "bill", bill_at: ago(90), split: 2, tip_pct: 10, pay_choice: "upi" });
     const v4 = db.visits.find(v => v.status === "bill");
     db.calls.push({ id: uid(), table_id: v4.table_id, visit_id: v4.id, kind: "bill", created_at: ago(90), seen_at: null, seen_by: null, done_at: null });
+    // invoice numbers for the paid history, in the order the bills were paid
+    db.visits.filter(v => v.status === "paid").sort((a, b) => a.paid_at < b.paid_at ? -1 : 1).forEach(v => { v.invoice_no = nextInvoice(db, v.paid_at); });
     db.born = now();   // the pretend kitchen leaves the seeded tables alone
     return db;
   }
@@ -122,6 +128,19 @@ const Demo = (() => {
   function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); } }
 
   /* ---------- helpers (mirror the SQL) ---------- */
+  /* Financial year code (2627 = Apr 2026–Mar 2027) and the next invoice number, same as 0006 */
+  function fyCode(d){ const x = new Date(d); const y = x.getFullYear() - (x.getMonth() < 3 ? 1 : 0); return String(y % 100).padStart(2, "0") + String((y + 1) % 100).padStart(2, "0"); }
+  function nextInvoice(d, at){ const fy = fyCode(at || new Date()); d.inv_no = d.inv_fy === fy ? (d.inv_no || 0) + 1 : 1; d.inv_fy = fy;
+    return (d.settings.invoice_prefix || "") + fy + "-" + String(d.inv_no).padStart(4, "0"); }
+  function receiptJson(vid){ const v = db.visits.find(x => x.id === vid); if (!v) return null; const s = db.settings, b = bill(vid);
+    const g = Number(b.gst || 0), c = Math.round(g / 2 * 100) / 100;
+    return { place: { name: s.restaurant_name, legal_name: s.legal_name || s.restaurant_name, address: s.bill_address || "", gstin: s.gstin || "", fssai: s.fssai || "",
+        sac: s.sac || "996331", composition: !!s.gst_composition, footer: s.bill_footer || "", width: s.receipt_width || 80, currency: s.currency },
+      status: v.status, invoice_no: v.invoice_no || null, at: v.paid_at || now(), opened_at: v.opened_at, label: label(v), kind: v.kind || "dine_in", guests: v.guests,
+      by: (db.staff.find(x => x.id === v.paid_by) || {}).name || null,
+      lines: b.lines.map(l => Object.assign({}, l, { unit: Math.round(l.amount / l.qty * 100) / 100 })), bill: b,
+      taxable: r2(b.subtotal - (b.discount || 0) + (b.service || 0)), cgst: c, sgst: Math.round((g - c) * 100) / 100,
+      payments: (db.payments || []).filter(p => p.visit_id === vid).map(p => ({ method: p.method, amount: p.amount, reference: p.reference })) }; }
   function stationOf(it, cats){ return it.station || (cats.find(c => c.id === it.category_id) || {}).station || ""; }
   const today = () => dayKey(new Date());
   const dayClosed = d => (db.closes || []).some(c => c.day === (d || today()));
@@ -195,7 +214,7 @@ const Demo = (() => {
   const role = () => (me() || {}).role;
   const need = ok => { if (!ok) err("You don't have access to this."); };
   const isManager = () => ["owner", "manager"].includes(role());
-  const isFloor = () => ["owner", "manager", "waiter"].includes(role());
+  const isFloor = () => ["owner", "manager", "cashier", "waiter"].includes(role());
   const log = (action, detail) => { const m = me() || {}; db.activity.unshift({ id: db.activity.length + 1, at: now(), by_id: m.id, by_name: m.name || "", action, detail: detail || "" }); db.activity = db.activity.slice(0, 300); };
   const inRange = (iso, from, to) => { const k = dayKey(iso); return k >= from && k <= to; };
 
@@ -214,7 +233,7 @@ const Demo = (() => {
       if (a > 40e3 && c.kind !== "bill") { c.done_at = now(); changed = true; } } });
     db.visits.forEach(v => { if (v.status === "bill" && v.kind !== "takeaway" && v.bill_at >= born && t - new Date(v.bill_at) > 45e3 && !db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) {
       db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = now(); });
-      Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: v.pay_choice || "upi", paid_by: "u-waiter" });
+      Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: v.pay_choice || "upi", paid_by: "u-waiter", invoice_no: nextInvoice(db) });
       db.payments.push({ id: uid(), visit_id: v.id, method: v.paid_method, amount: v.total, reference: "", status: "captured", created_by: "u-waiter", created_at: now() });
       db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); }); changed = true; } });
     if (changed) save();
@@ -234,13 +253,13 @@ const Demo = (() => {
       tot = r2(tot + amt); methods.add(m); detail += (detail ? " + " : "") + m.toUpperCase() + (parts.length > 1 ? " ₹" + amt : ""); if (ref) refs += " · ref " + ref;
       return { id: uid(), visit_id: v.id, method: m, amount: amt, reference: ref, status: "captured", created_by: me().id, created_at: now() }; });
     if (tot !== b.grand) err("The payments add up to ₹" + tot + " but the bill is ₹" + b.grand + ".");
-    Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: methods.size === 1 ? [...methods][0] : "mixed", paid_by: me().id });
+    Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: methods.size === 1 ? [...methods][0] : "mixed", paid_by: me().id, invoice_no: nextInvoice(db) });
     (db.payments = db.payments || []).push(...rows);
     if (v.kind !== "takeaway") {
       db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = o.served_at || now(); });
       db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); }); }
-    log("bill_paid", label(v) + " · " + detail + " · ₹" + v.total + refs);
-    save(); return bill(v.id); }
+    log("bill_paid", label(v) + " · " + v.invoice_no + " · " + detail + " · ₹" + v.total + refs);
+    save(); return Object.assign(bill(v.id), { invoice_no: v.invoice_no }); }
 
   /* Allowed order steps — same list as order_step_ok() in 0003_hardening.sql */
   const STEPS = ["new>cooking", "new>cancelled", "cooking>ready", "cooking>new", "cooking>cancelled", "ready>served", "ready>cooking", "ready>cancelled", "served>ready"];
@@ -259,7 +278,8 @@ const Demo = (() => {
     guest_state({ p_token }){ bot(); const t = tableBy(p_token), s = db.settings, v = openVisit(t.id);
       if (!v) { const lp = db.visits.filter(x => x.table_id === t.id && x.status === "paid" && Date.now() - new Date(x.paid_at) < 2 * 3600e3)
           .sort((a, b) => a.paid_at < b.paid_at ? 1 : -1)[0];
-        return { visit: null, now: now(), last_paid: lp ? { id: lp.id, paid_at: lp.paid_at, total: lp.total, reviewed: db.reviews.some(r => r.visit_id === lp.id) } : null }; }
+        return { visit: null, now: now(), last_paid: lp ? { id: lp.id, paid_at: lp.paid_at, total: lp.total, reviewed: db.reviews.some(r => r.visit_id === lp.id),
+          receipt: (({ by, ...r }) => r)(receiptJson(lp.id)) } : null }; }
       return { now: now(), last_paid: null, visit: { id: v.id, status: v.status, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice,
         orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson),
         calls: db.calls.filter(c => c.visit_id === v.id && !c.done_at).map(c => ({ kind: c.kind, at: c.created_at, seen: !!c.seen_at })),
@@ -321,7 +341,7 @@ const Demo = (() => {
       if (!orderOpen(o, p_status === "cancelled")) err("This bill is already closed, so its orders can't change.");
       if (o.status === p_status) return orderJson(o);
       if (!STEPS.includes(o.status + ">" + p_status)) err("This order is " + o.status + " and can't go to " + p_status + " from there. Refresh the screen.");
-      if (p_status === "cancelled") need(["owner", "manager"].includes(r) || (r === "waiter" && o.status === "new"));
+      if (p_status === "cancelled") need(["owner", "manager"].includes(r) || (["waiter", "cashier"].includes(r) && o.status === "new"));
       const was = o.status; o.status = p_status;
       if (["ready", "served"].includes(p_status)) o.items.forEach(i => { i.done_at = i.done_at || now(); });
       else if (p_status === "new" || (p_status === "cooking" && ["ready", "served"].includes(was))) o.items.forEach(i => { i.done_at = null; });
@@ -378,6 +398,20 @@ const Demo = (() => {
         if (o.items.every(i => i.done_at)) { o.status = "ready"; o.ready_at = o.ready_at || now(); } }
       else if (o.status === "ready") { o.status = "cooking"; o.ready_at = null; }
       save(); return orderJson(o); },
+    staff_receipt({ p_visit }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && x.status !== "void"); if (!v) err("That bill is gone."); return receiptJson(v.id); },
+    owner_save_bill_settings({ p }){ need(role() === "owner"); const g = String(p.gstin ?? db.settings.gstin ?? "").trim().toUpperCase();
+      if (g && !/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]Z[0-9A-Z]$/.test(g)) err("Check the GSTIN: 15 characters, like 27ABCDE1234F1Z5.");
+      if (!/^([0-9]{14})?$/.test(String(p.fssai ?? "").trim())) err("The FSSAI licence number has 14 digits.");
+      if (!/^[A-Z0-9]{0,5}$/.test(String(p.invoice_prefix ?? "").trim().toUpperCase())) err("Use up to 5 letters or numbers for the bill number prefix.");
+      if (p.sac != null && !/^[0-9]{4,8}$/.test(String(p.sac))) err("The SAC code is 4 to 8 digits (996331 for restaurants).");
+      if (p.receipt_width != null && ![58, 80].includes(+p.receipt_width)) err("Pick 58 or 80 mm paper.");
+      const comp = p.gst_composition ?? db.settings.gst_composition;
+      if (comp && db.settings.gst_pct > 0) err("Restaurants in the GST composition scheme can't charge GST. Set GST to 0 % first.");
+      Object.assign(db.settings, { legal_name: String(p.legal_name ?? db.settings.legal_name).trim().slice(0, 120), bill_address: String(p.bill_address ?? db.settings.bill_address).trim().slice(0, 300),
+        gstin: "gstin" in p ? g : db.settings.gstin, fssai: p.fssai != null ? String(p.fssai).trim() : db.settings.fssai, sac: p.sac || db.settings.sac, gst_composition: !!comp,
+        invoice_prefix: p.invoice_prefix != null ? String(p.invoice_prefix).trim().toUpperCase() : db.settings.invoice_prefix,
+        bill_footer: String(p.bill_footer ?? db.settings.bill_footer).slice(0, 160), receipt_width: p.receipt_width != null ? +p.receipt_width : db.settings.receipt_width });
+      log("bill_settings_changed", "gstin" in p ? "GSTIN " + (g || "removed") : ""); save(); return null; },
     staff_set_notice({ p_text }){ need(isManager()); const t = String(p_text || "").trim(); if (t.length > 300) err("Keep the notice under 300 characters.");
       Object.assign(db.settings, { team_notice: t, team_notice_at: t ? now() : null, team_notice_by: t ? myName() : "" });
       log(t ? "notice_changed" : "notice_cleared", t.slice(0, 120)); save(); return null; },
@@ -418,7 +452,7 @@ const Demo = (() => {
     staff_bills({ p_from, p_to }){ need(isFloor());
       return db.visits.filter(v => ["paid", "void"].includes(v.status) && inRange(v.paid_at || v.opened_at, p_from, p_to))
         .sort((a, b) => (a.paid_at || a.opened_at) < (b.paid_at || b.opened_at) ? 1 : -1)
-        .map(v => ({ id: v.id, table: label(v), kind: v.kind || "dine_in", opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
+        .map(v => ({ id: v.id, table: label(v), kind: v.kind || "dine_in", invoice_no: v.invoice_no || null, gst: v.gst, opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
           method: v.paid_method, total: v.total, tip: v.tip, discount: v.discount || 0, guests: v.guests, void_reason: v.void_reason, by: (db.staff.find(s => s.id === v.paid_by) || {}).name || null,
           bill: bill(v.id), ref: (db.payments || []).filter(x => x.visit_id === v.id && x.reference).map(x => x.reference).join(", ") || null,
           stars: (db.reviews.find(r => r.visit_id === v.id) || {}).stars || null })); },
@@ -468,6 +502,7 @@ const Demo = (() => {
       if (p.gst_pct != null && (+p.gst_pct < 0 || +p.gst_pct > 28)) err("GST must be between 0 and 28%.");
       if (p.tip_options && p.tip_options.some(x => !(x >= 0 && x <= 30))) err("Tip choices must be between 0 and 30%.");
       if (p.service_pct != null && (+p.service_pct < 0 || +p.service_pct > 20)) err("Service charge must be between 0 and 20%.");
+      if (db.settings.gst_composition && p.gst_pct != null && +p.gst_pct > 0) err("Restaurants in the GST composition scheme can't charge GST. Set GST to 0 % first.");
       if (p.max_discount_pct != null && (+p.max_discount_pct < 0 || +p.max_discount_pct > 100)) err("The discount limit must be between 0 and 100%.");
       if (p.stations) { const seen = new Set(); p = Object.assign({}, p, { stations: p.stations.map(x => String(x).trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())) });
         if (p.stations.length > 8) err("Use up to 8 kitchen stations."); if (p.stations.some(x => x.length > 24)) err("Keep station names under 24 characters.");
@@ -511,7 +546,7 @@ const Demo = (() => {
     teamAdmin(b){ load(); need(role() === "owner");
       if (b.action === "add") { if (!b.name || !/^\S+@\S+\.\S+$/.test(b.email || "")) err("Enter a name and a valid email.");
         if ((b.password || "").length < 8) err("The password must be at least 8 characters.");
-        if (db.staff.some(s => s.email === b.email.toLowerCase())) err("That email already has a login.");
+        if (db.staff.some(s => s.email === b.email.toLowerCase())) err("That person is already on your team.");
         db.staff.push({ id: uid(), name: b.name, email: b.email.toLowerCase(), phone: b.phone || "", role: b.role || "waiter", active: true, created_at: now() }); log("login_added", b.name + " (" + b.role + ")"); }
       else if (b.action === "update") { const s = db.staff.find(x => x.id === b.id); if (!s) err("Unknown login.");
         if (s.id === me().id && (b.role !== "owner" || b.active === false)) err("You can't remove your own owner access.");

@@ -6,15 +6,16 @@ import type { Role } from "./types";
 export type Route = "today" | "pos" | "floor" | "kitchen" | "bills" | "menu" | "tables" | "team" | "settings" | "help" | "design";
 
 export type NavItem = { route: Route; label: string; short: string; Icon: typeof Receipt; roles: Role[]; group: "service" | "manage" | "help" };
-const ALL: Role[] = ["owner", "manager", "waiter", "kitchen"];
+const ALL: Role[] = ["owner", "manager", "cashier", "waiter", "kitchen"];
+const FLOOR: Role[] = ["owner", "manager", "cashier", "waiter"];
 
 /** Roles mirror the database checks (is_floor / is_manager / is_owner); the database refuses anyway. */
 export const NAV: NavItem[] = [
   { route: "today", label: "Today", short: "Today", Icon: LayoutDashboard, roles: ["owner", "manager"], group: "service" },
-  { route: "pos", label: "POS & billing", short: "POS", Icon: Receipt, roles: ["owner", "manager", "waiter"], group: "service" },
-  { route: "floor", label: "Floor", short: "Floor", Icon: LayoutGrid, roles: ["owner", "manager", "waiter"], group: "service" },
+  { route: "pos", label: "POS & billing", short: "POS", Icon: Receipt, roles: FLOOR, group: "service" },
+  { route: "floor", label: "Floor", short: "Floor", Icon: LayoutGrid, roles: FLOOR, group: "service" },
   { route: "kitchen", label: "Kitchen", short: "Kitchen", Icon: ChefHat, roles: ALL, group: "service" },
-  { route: "bills", label: "Bills", short: "Bills", Icon: ScrollText, roles: ["owner", "manager", "waiter"], group: "service" },
+  { route: "bills", label: "Bills", short: "Bills", Icon: ScrollText, roles: FLOOR, group: "service" },
   { route: "menu", label: "Menu", short: "Menu", Icon: UtensilsCrossed, roles: ALL, group: "manage" },
   { route: "tables", label: "Tables & QR", short: "Tables", Icon: QrCode, roles: ["owner", "manager"], group: "manage" },
   { route: "team", label: "Team", short: "Team", Icon: Users, roles: ["owner"], group: "manage" },
@@ -22,5 +23,5 @@ export const NAV: NavItem[] = [
   { route: "help", label: "Help", short: "Help", Icon: CircleHelp, roles: ALL, group: "help" },
 ];
 export const ROUTES: Route[] = [...NAV.map(n => n.route), "design"];
-export const HOME: Record<Role, Route> = { owner: "today", manager: "today", waiter: "floor", kitchen: "kitchen" };
+export const HOME: Record<Role, Route> = { owner: "today", manager: "today", cashier: "pos", waiter: "floor", kitchen: "kitchen" };
 export const GuideIcon = BookOpen;

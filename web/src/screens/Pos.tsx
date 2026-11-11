@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Banknote, ChefHat, CreditCard, HandPlatter, Layers, Minus, Percent, Plus, Search, ShoppingBag, Smartphone, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { Banknote, ChefHat, CreditCard, HandPlatter, Printer, Layers, Minus, Percent, Plus, Search, ShoppingBag, Smartphone, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, Diet, EmptyState, Field, Input, Segmented, Skeleton } from "@/components/ui/primitives";
 import { Dialog, toast } from "@/components/ui/overlay";
@@ -9,10 +9,14 @@ import { newRequestId, rpc } from "@/lib/api";
 import { useAction, useStaff } from "@/lib/staff";
 import type { Bill, CartLine, LiveVisit, MenuItem, PayPart, StaffMenu } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
+import { ReceiptDialog } from "./ReceiptDialog";
+import { enqueue, isOffline, useOutbox } from "@/lib/outbox";
 
 export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | null; setTableId: (id: string) => void; payNow: boolean }) {
-  const { live, can } = useStaff();
+  const { live, can, me, reload } = useStaff();
   const { run, pending } = useAction();
+  const { jobs, retry } = useOutbox(me?.restaurant_id, (m, ok) => { toast(m, ok ? undefined : "error"); reload(); });
+  const [sending, setSending] = React.useState(false);
   const [menu, setMenu] = React.useState<StaffMenu | null>(null);
   const [cat, setCat] = React.useState("all");
   const [q, setQ] = React.useState("");
@@ -21,6 +25,7 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
   const [pick, setPick] = React.useState<MenuItem | null>(null);
   const [pay, setPay] = React.useState(false);
   const [disc, setDisc] = React.useState(false);
+  const [receiptFor, setReceiptFor] = React.useState<string | null>(null);
   const request = React.useRef<string | null>(null);   // kept across retries of the same send
 
   const loadMenu = React.useCallback(() => rpc<StaffMenu>("staff_menu").then(setMenu).catch(e => toast((e as Error).message, "error")), []);
@@ -58,15 +63,25 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
     if (!table && !takeaway) return toast("Pick a table first", "error");
     request.current ??= newRequestId();
     const p_items = cart.map(l => ({ id: l.id, qty: l.qty, size: l.size ?? "", addons: l.addons ?? [] }));
-    if (takeaway) {
-      const r = await run(() => rpc<{ visit_id: string; token: number }>("staff_takeaway_order", {
-        p_visit: token?.id ?? null, p_items, p_note: note.trim(), p_request_id: request.current }));
-      if (r) { setCart([]); setNote(""); toast(`Sent to the kitchen · Token ${r.token}`); if (!token) setTableId(r.visit_id); }
-      return;
-    }
-    const ok = await run(() => rpc("staff_add_order", { p_table: table!.id, p_note: note.trim(), p_request_id: request.current, p_items }).then(() => true),
-      `Sent to the kitchen · ${table!.code}`);
-    if (ok) { setCart([]); setNote(""); }
+    const fn = takeaway ? "staff_takeaway_order" as const : "staff_add_order" as const;
+    const args = takeaway ? { p_visit: token?.id ?? null, p_items, p_note: note.trim(), p_request_id: request.current }
+                          : { p_table: table!.id, p_items, p_note: note.trim(), p_request_id: request.current };
+    const where = takeaway ? (token ? `Token ${token.token}` : "New takeaway") : table!.code;
+    setSending(true);
+    try {
+      const r = await rpc<{ visit_id: string; token?: number }>(fn, args);
+      setCart([]); setNote("");
+      toast(`Sent to the kitchen · ${takeaway ? `Token ${r.token}` : where}`);
+      if (takeaway && !token) setTableId(r.visit_id);
+      reload();
+    } catch (e) {
+      if (isOffline(e) && me?.restaurant_id) {
+        // keep it on this device; it goes out by itself when the connection is back (same request id = saved once)
+        enqueue({ id: request.current!, fn, args, label: where, restaurant: me.restaurant_id, at: new Date().toISOString() });
+        setCart([]); setNote("");
+        toast(`No internet. The order for ${where} is saved on this device and will be sent when the connection is back.`);
+      } else toast((e as Error).message, "error");
+    } finally { setSending(false); }
   };
   const handOver = () => run(async () => {
     for (const o of token!.orders.filter(o => o.status === "ready")) await rpc("staff_order_status", { p_order: o.id, p_status: "served" });
@@ -149,6 +164,12 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
           {visit && !takeaway && <TableStatus state={tableState(visit)} />}
           {token && <Badge tone={paidTakeaway ? "blue" : "warning"}><ShoppingBag aria-hidden />{paidTakeaway ? "Paid" : "Takeaway"}</Badge>}
         </div>
+        {jobs.length > 0 && (
+          <div role="status" className="flex items-center gap-2 border-b border-border bg-warning-soft px-5 py-2 text-[13px] font-semibold text-warning-strong">
+            <span className="flex-1">{jobs.length} order{jobs.length > 1 ? "s" : ""} waiting for the connection: {jobs.map(j => j.label).join(", ")}</span>
+            <button className="underline underline-offset-2" onClick={() => retry()}>Try now</button>
+          </div>
+        )}
         <div className="flex-1 overflow-auto px-5">
           {visit && visit.bill.lines.length > 0 && (
             <div className="border-b border-dashed border-border py-3">
@@ -199,12 +220,14 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
             <Button size="xl" variant="success" className="mt-3 w-full" disabled={pending || !token!.orders.some(o => o.status === "ready")} onClick={handOver}><HandPlatter />Handed over</Button>
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button size="xl" variant="ink" disabled={!cart.length || (!table && !takeaway) || pending} onClick={send}><ChefHat />Send</Button>
+              <Button size="xl" variant="ink" disabled={!cart.length || (!table && !takeaway) || pending || sending} onClick={send}><ChefHat />Send</Button>
               <Button size="xl" variant="primary" disabled={!visit || pending} onClick={() => setPay(true)}>Take payment</Button>
             </div>
           )}
           <div className="mt-2 flex items-center gap-3">
             {cart.length > 0 && <button className="flex items-center gap-1 text-[12px] font-semibold text-fg-2" onClick={() => setCart([])}><Trash2 className="size-3.5" />Clear new items</button>}
+            {visit && visit.bill.subtotal > 0 && (
+              <button className="flex items-center gap-1 text-[12px] font-semibold text-fg-2" onClick={() => setReceiptFor(visit.id)}><Printer className="size-3.5" />Print bill</button>)}
             {visit && !paidTakeaway && can("manage") && visit.bill.subtotal > 0 && (
               <button className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-blue" onClick={() => setDisc(true)}><Percent className="size-3.5" />{(visit.bill.discount ?? 0) > 0 ? "Change discount" : "Discount"}</button>)}
           </div>
@@ -214,7 +237,8 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
       <Dialog open={!!pick} onOpenChange={o => !o && setPick(null)} title={pick?.name ?? ""} description="Choose a size and any extras.">
         {pick && <Picker i={pick} onAdd={(s, a) => { add(pick, s, a); setPick(null); }} />}
       </Dialog>
-      {visit && !paidTakeaway && <PayDialog open={pay} onOpenChange={setPay} visit={visit} label={visitLabel(visit, live.tables)} canEdit={can("floor")} />}
+      {visit && !paidTakeaway && <PayDialog open={pay} onOpenChange={setPay} visit={visit} label={visitLabel(visit, live.tables)} canEdit={can("floor")} onPaid={setReceiptFor} />}
+      <ReceiptDialog open={!!receiptFor} onOpenChange={o => !o && setReceiptFor(null)} visitId={receiptFor} />
       {visit && !paidTakeaway && <DiscountDialog open={disc} onOpenChange={setDisc} visit={visit} limit={live.settings.max_discount_pct} owner={can("own")} />}
     </div>
   );
@@ -257,7 +281,7 @@ const LABEL: Record<Single, string> = { upi: "UPI", card: "Card", cash: "Cash" }
 const amt = (s: string) => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 type Part = { method: Single; amount: string; reference: string };
 
-function PayDialog({ open, onOpenChange, visit, label, canEdit }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; label: string; canEdit: boolean }) {
+function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; label: string; canEdit: boolean; onPaid: (visitId: string) => void }) {
   const { run, pending } = useAction();
   const [method, setMethod] = React.useState<Single | "split">("upi");
   const [ref, setRef] = React.useState("");
@@ -342,7 +366,7 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit }: { open: boolea
       {kitchen && <p className="mt-3 rounded-[var(--radius)] bg-warning-soft px-3 py-2 text-[13px] font-semibold text-warning-strong">Some dishes are still with the kitchen. Serve or cancel them before closing the bill.</p>}
       <Button size="xl" variant="primary" className="mt-4 w-full" disabled={pending || kitchen || !ready}
         onClick={async () => { const ok = await run(() => rpc("staff_pay", { p_visit: visit.id, p_parts: payload }).then(() => true),
-          visit.kind === "takeaway" ? `Paid · ${label}` : `Paid · table ${label} is free`); if (ok) onOpenChange(false); }}>
+          visit.kind === "takeaway" ? `Paid · ${label}` : `Paid · table ${label} is free`); if (ok) { onOpenChange(false); onPaid(visit.id); } }}>
         Mark paid · {inr(b.grand)}
       </Button>
     </Dialog>

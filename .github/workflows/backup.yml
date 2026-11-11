@@ -1,0 +1,63 @@
+# Daily DineOS database backup, encrypted, kept 30 days (then GitHub deletes it by itself).
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions), typed by the owner:
+#   SUPABASE_DB_URL     the Session pooler connection string from Supabase (Connect → Session pooler),
+#                       with the database password filled in. The pooler works over IPv4, which
+#                       GitHub's machines need.
+#   BACKUP_PASSPHRASE   a long passphrase. The backup can't be opened without it: keep it in a
+#                       password manager, never in the repo or in chat.
+# Without the secrets the job says so and stops (it doesn't fail the build).
+#
+# The repo is public, so the file is encrypted before it is stored. Restore steps: docs/BACKUPS.md.
+name: Backup
+on:
+  schedule:
+    - cron: "35 21 * * *"   # 03:05 India time, every night
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: backup
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        id: ok
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
+            echo "::notice::Backup skipped: add SUPABASE_DB_URL and BACKUP_PASSPHRASE in the repository's Actions secrets."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else echo "go=yes" >> "$GITHUB_OUTPUT"; fi
+      - name: Install the PostgreSQL 17 client
+        if: steps.ok.outputs.go == 'yes'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Dump and encrypt
+        if: steps.ok.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          umask 077; mkdir -p out; STAMP=$(TZ=Asia/Kolkata date +%Y-%m-%d)
+          PG=/usr/lib/postgresql/17/bin
+          # app data and functions (schema public), then the logins (auth.users / auth.identities, data only)
+          $PG/pg_dump "$DB_URL" --schema=public --no-owner --no-privileges -Fc -f out/public.dump
+          $PG/pg_dump "$DB_URL" --data-only --table=auth.users --table=auth.identities -Fc -f out/auth.dump
+          tar -C out -cf - public.dump auth.dump | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+            --symmetric --cipher-algo AES256 -o "dineos-$STAMP.tar.gpg" 3<<<"$PASS"
+          rm -rf out
+          ls -l "dineos-$STAMP.tar.gpg"
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+      - name: Keep for 30 days
+        if: steps.ok.outputs.go == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dineos-backup-${{ env.STAMP }}
+          path: dineos-*.tar.gpg
+          retention-days: 30
+          if-no-files-found: error

@@ -7,6 +7,7 @@ import { Dialog, Sheet, toast, Toaster } from "@/components/ui/overlay";
 import { newRequestId, rpc } from "@/lib/api";
 import type { CartLine, GuestMenu, GuestState } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
+import { ReceiptDialog } from "./ReceiptDialog";
 
 type Item = GuestMenu["items"][number];
 const read = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) as T : d; } catch { return d; } };
@@ -310,6 +311,15 @@ function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   return <button type="button" aria-pressed={on} onClick={onClick} className={cn("h-10 min-w-12 rounded-full border border-border bg-surface px-3 text-sm font-semibold text-fg", on && "border-ink bg-ink text-surface")}>{children}</button>;
 }
 
+function BillLink({ paid }: { paid: NonNullable<GuestState["last_paid"]> }) {
+  const [open, setOpen] = React.useState(false);
+  if (!paid.receipt) return null;
+  return <>
+    <button className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-blue" onClick={() => setOpen(true)}><Receipt className="size-4" aria-hidden />View or share your bill</button>
+    <ReceiptDialog open={open} onOpenChange={setOpen} receipt={paid.receipt} canPrint={false} />
+  </>;
+}
+
 function Review({ token, paid, reviewUrl, onDone }: { token: string; paid: NonNullable<GuestState["last_paid"]>; reviewUrl: string; onDone: () => void }) {
   const [stars, setStars] = React.useState(0);
   const [comment, setComment] = React.useState("");
@@ -318,12 +328,14 @@ function Review({ token, paid, reviewUrl, onDone }: { token: string; paid: NonNu
     <div className="mx-4 mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4 text-center">
       <p className="font-display text-base font-bold text-fg">Thank you!</p>
       {reviewUrl && stars >= 4 && <a href={reviewUrl} target="_blank" rel="noopener" className="mt-2 inline-block text-sm font-semibold text-blue">Share it on Google too</a>}
+      <div><BillLink paid={paid} /></div>
     </div>
   );
   return (
     <div className="mx-4 mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4">
       <p className="font-display text-base font-bold text-fg">Thanks for visiting. How was it?</p>
       <p className="text-[12px] text-fg-2">Paid {inr(paid.total)}. Your rating is anonymous.</p>
+      <BillLink paid={paid} />
       <div className="mt-3 flex gap-1" role="radiogroup" aria-label="Rating">
         {[1, 2, 3, 4, 5].map(n => <button key={n} role="radio" aria-checked={stars === n} aria-label={`${n} star${n > 1 ? "s" : ""}`} onClick={() => setStars(n)}>
           <Star className={cn("size-8", n <= stars ? "fill-coral text-coral" : "text-border-strong")} /></button>)}

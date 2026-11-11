@@ -1,6 +1,6 @@
 # DineOS: product definition (v1)
 
-Status: **prototype approved 11 Nov 2026; Phase 3 database (0004) done; Phase 4 screens on live data done (sign-in, restaurant setup, Today, POS, Floor, Kitchen, guest page); Phase 5a admin screens done (Menu, Tables & QR, Team, Settings, Bills, Help, password reset). Live at dineos.littlegasp-orders.workers.dev on its own Supabase project. 0005 (discounts, takeaway tokens, split payments, kitchen stations and dish ticks, close the day, team notice) live 11 Nov 2026.** Branch `dineos`. Nothing here is live yet;
+Status: **prototype approved 11 Nov 2026; Phase 3 database (0004) done; Phase 4 screens on live data done (sign-in, restaurant setup, Today, POS, Floor, Kitchen, guest page); Phase 5a admin screens done (Menu, Tables & QR, Team, Settings, Bills, Help, password reset). Live at dineos.littlegasp-orders.workers.dev on its own Supabase project. 0005 (discounts, takeaway tokens, split payments, kitchen stations and dish ticks, close the day, team notice) live 11 Nov 2026. 0006 (GST bills with invoice numbers, cashier role) plus offline orders, alerts, tour, existing-login invites and encrypted backups written and tested on branch `dineos-0006`. Name clash: another Indian restaurant POS is called DineOS (dineos.co.in), so a rename is needed before launch.** Branch `dineos`. Nothing here is live yet;
 the current Dinedot app on `main` keeps running unchanged until DineOS replaces it.
 
 ## Decisions (agreed 11 Nov 2026)
@@ -9,7 +9,7 @@ the current Dinedot app on `main` keeps running unchanged until DineOS replaces 
 |---|---|
 | Shape | One system, many restaurants (multi-tenant). Each restaurant is a row, not a copy of the repo. |
 | Stack | Next.js 15 + TypeScript + Tailwind 4 (same as Studio CRM), static export on Cloudflare. Supabase (Mumbai) stays; money and permissions stay in SQL functions. |
-| Name | DineOS (trademark and domain check still to do). |
+| Name | DineOS is taken by another Indian restaurant POS (dineos.co.in): rename needed before launch. |
 | v1 scope | Core ops + POS: guest QR ordering, waiter floor, kitchen stations, POS billing with discounts, split payments, takeaway, daily close. |
 
 ## Who uses it

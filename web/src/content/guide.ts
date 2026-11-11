@@ -7,6 +7,12 @@ import type { Route } from "@/lib/routes";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "11 Nov 2026", text: "GST bills: every paid bill gets a bill number (like CP2627-0001, starting again each 1 April). Print it on the receipt printer or share it. Add your GSTIN and FSSAI number in Settings → Bills." },
+  { date: "11 Nov 2026", text: "New role: Cashier. Opens on the POS; takes orders, takeaway and payments and prints bills, but can't give discounts or clear tables." },
+  { date: "11 Nov 2026", text: "No internet? Orders sent from the POS are kept on the device and go to the kitchen by themselves when the connection is back." },
+  { date: "11 Nov 2026", text: "Alerts: a chime (and a notification if you turn it on) for new orders in the kitchen, and for calls and food ready to serve on the floor. Turn them on or off from the bell." },
+  { date: "11 Nov 2026", text: "Someone who already has a DineOS login (for example at another restaurant) can now be added to your team from Team → Add login." },
+  { date: "11 Nov 2026", text: "A short tour shows the first time you open each screen. Help → Show the tours again brings them back." },
   { date: "11 Nov 2026", text: "Takeaway: tap Takeaway in the POS for an order without a table. It gets a token number (1, 2, 3… from the start of each day)." },
   { date: "11 Nov 2026", text: "Discounts: owners and managers can take a percent or an amount off a bill, with a reason. Managers have a limit the owner sets in Settings." },
   { date: "11 Nov 2026", text: "Split payment: one bill can be paid partly by UPI, card and cash. Each part is saved with its own reference." },
@@ -48,6 +54,8 @@ export const GUIDE: Record<Route, Section> = {
       "Discount (owner and manager): tap Discount under the bill, choose Percent or Amount, write the reason and tap Give discount. It comes off the items before GST, and the guest's phone shows it too.",
     ],
     tips: ["The bill total always comes from the system, so it matches what the guest sees on their phone.", "For cash, type what the guest handed over to see the change.",
+      "Print bill shows the bill before payment (to hand the guest). After Mark paid, the final bill with its bill number opens by itself: tap Print or Share.",
+      "No internet when you tap Send? The order stays on this device (a yellow line shows it) and goes to the kitchen by itself when the connection is back. Payments always need the connection.",
       "Managers can give up to the limit set in Settings (20% to start). Every discount is saved in the activity history with who gave it and why."],
   },
   floor: {
@@ -68,6 +76,7 @@ export const GUIDE: Record<Route, Section> = {
       "Tap a dish to tick it off when it's done. When every dish of an order is ticked, the order moves to Ready by itself. Tap it again to untick.",
       "Stations: if the owner has set up stations (Tandoor, Curry, Bar…), pick this screen's station at the top. You'll see only your dishes; the rest show as 'for other stations'. All stations shows everything.",
       "Takeaway orders show their token number and a Takeaway badge instead of a table.",
+      "A chime plays for each new order. Tap anywhere once after opening the screen so the tablet allows sound. The screen stays on while the kitchen screen is open.",
       "An order turns amber as it gets close to 15 minutes and red with the word late after that.",
       "Notes from the guest or waiter (less spicy, allergies) show in a yellow box.",
       "Tapped the wrong button? The arrow button moves the order back one step.",
@@ -80,7 +89,8 @@ export const GUIDE: Record<Route, Section> = {
       "Choose Today, Yesterday or Last 7 days, or pick your own dates.",
       "Tap a bill to see the dishes, discount, tax, tip, each payment with its reference, and who closed it.",
       "Takeaway bills show their token number instead of a table.",
-      "Download saves the bills on screen as a spreadsheet file.",
+      "Download saves the bills on screen as a spreadsheet file, with each bill number.",
+      "Tap a paid bill, then Print or share the bill to print it again or send it.",
     ],
   },
   menu: {
@@ -110,7 +120,8 @@ export const GUIDE: Record<Route, Section> = {
     intro: "Who can sign in, and what they can do.",
     steps: [
       "Tap Add login, enter their name, email, role and a first password. Tell them the password in person.",
-      "Roles: Owner (everything), Manager (everything except Team and Settings), Waiter (floor, POS, bills), Kitchen (kitchen screen and sold-out switches).",
+      "Roles: Owner (everything), Manager (everything except Team and Settings), Cashier (POS, takeaway, payments, bills; opens on the POS), Waiter (floor, POS, bills), Kitchen (kitchen screen and sold-out switches). Only owners and managers give discounts or clear tables.",
+      "If the person already has a DineOS login (for example at another restaurant), Add login puts them on your team and they keep their own password.",
       "Switch someone off when they leave or are on leave. They can't sign in until you switch them on.",
       "Set password gives someone a new password if they've forgotten theirs.",
     ],
@@ -122,6 +133,7 @@ export const GUIDE: Record<Route, Section> = {
       "Restaurant: name, tagline, cover photo and welcome note shown at the top of the guest page.",
       "Bill: GST % and service charge %, the tip choices guests see, and the most a manager can take off a bill as a discount.",
       "Kitchen stations: type your counters separated by commas (for example Tandoor, Curry, Bar). Then pick a station for each section in Menu.",
+      "Bills: your legal name, address, GSTIN and FSSAI licence number as they should print, the bill number prefix, and the receipt paper width (80 or 58 mm). Tick GST composition scheme only if you're registered under it: bills then print as a Bill of supply with no GST.",
       "Payments: your UPI ID (money goes straight to you, no fees), and whether you take cash and card.",
       "Guest Wi-Fi: shown to guests only while they have an open bill.",
       "Tap Save at the bottom. Changes reach guests' phones within a few seconds.",
@@ -130,7 +142,9 @@ export const GUIDE: Record<Route, Section> = {
   help: {
     title: "Help", who: "Everyone",
     intro: "This guide. It's updated every time a screen changes.",
-    steps: ["Pick a screen on the left (or above on a phone) to read how it works.", "What's new lists recent changes, newest first."],
+    steps: ["Pick a screen on the left (or above on a phone) to read how it works.", "What's new lists recent changes, newest first.",
+      "Show the tours again brings back the short tour on each screen.",
+      "The bell (top right) shows calls from tables. At the bottom of it you can turn the alert sound and notifications on or off for this device."],
   },
   design: {
     title: "Design system", who: "For the DineOS team",

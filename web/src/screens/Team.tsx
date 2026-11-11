@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 export const ROLE_INFO: Record<Role, { label: string; what: string }> = {
   owner: { label: "Owner", what: "Everything, including Team and Settings" },
   manager: { label: "Manager", what: "Everything except Team and Settings" },
+  cashier: { label: "Cashier", what: "POS, takeaway, payments, bills and printing bills. No discounts, no clearing tables" },
   waiter: { label: "Waiter", what: "Floor, POS, Bills and the kitchen screen" },
   kitchen: { label: "Kitchen", what: "Kitchen screen and sold-out switches" },
 };
@@ -64,7 +65,15 @@ function MemberSheet({ m, self, onClose, onSaved }: { m: Partial<TeamMember>; se
     try { await fn(); toast(ok); if (close) onSaved(); } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
   };
   const save = () => isNew
-    ? act(() => teamAdmin({ action: "add", ...f, password: pw }), `Login added for ${f.name}. Tell them the password in person.`)
+    ? (async () => {
+        setBusy(true);
+        try {
+          const r = await teamAdmin({ action: "add", ...f, password: pw }) as { existing?: boolean } | null;
+          toast(r?.existing ? `${f.name} already had a DineOS login, so they're added to your team. They sign in with their own password.`
+                            : `Login added for ${f.name}. Tell them the password in person.`);
+          onSaved();
+        } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
+      })()
     : act(async () => {
         // name, phone, role and on/off go straight to the database; a new email needs the login manager
         if (f.email.trim().toLowerCase() !== (m.email ?? "").toLowerCase()) await teamAdmin({ action: "update", id: m.id, ...f });
@@ -78,12 +87,12 @@ function MemberSheet({ m, self, onClose, onSaved }: { m: Partial<TeamMember>; se
         <Field label="Email" hint={isNew ? undefined : "Changing it changes how they sign in."}><Input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
         <Field label="Phone (optional)"><Input inputMode="tel" value={f.phone} maxLength={20} onChange={e => setF({ ...f, phone: e.target.value })} /></Field>
         <fieldset><legend className="mb-1.5 text-[13px] font-semibold text-fg">Role</legend>
-          <Segmented<Role> value={f.role} onChange={r => setF({ ...f, role: r })} className="flex w-full [&>button]:flex-1"
+          <Segmented<Role> value={f.role} onChange={r => setF({ ...f, role: r })} className="flex w-full flex-wrap [&>button]:flex-1"
             options={(Object.keys(ROLE_INFO) as Role[]).map(r => ({ value: r, label: ROLE_INFO[r].label }))} />
           <p className="mt-1.5 text-[12px] text-fg-2">{ROLE_INFO[f.role].what}</p>
         </fieldset>
         {isNew ? (
-          <Field label="First password" hint="At least 8 characters. Tell them in person; they can change it later."><Input type="text" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
+          <Field label="First password" hint="At least 8 characters. Tell them in person; they can change it later. If they already have a DineOS login, they keep their own."><Input type="text" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
         ) : (
           <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
             <span><span className="block text-sm font-semibold text-fg">Can sign in</span><span className="text-[12px] text-fg-2">Switch off when someone leaves or is on leave.</span></span>

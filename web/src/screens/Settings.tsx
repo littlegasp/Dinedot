@@ -31,9 +31,14 @@ export function SettingsScreen() {
       const tip_options = tipList.length ? tipList : [0];
       const { restaurant_name, tagline, cover_url, welcome_note, closed_message, gst_pct, service_pct, upi_id, upi_name,
         pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url, max_discount_pct } = s;
-      await rpc("owner_save_settings", { p: { restaurant_name, tagline, cover_url, welcome_note, closed_message, gst_pct, service_pct,
+      const general = () => rpc("owner_save_settings", { p: { restaurant_name, tagline, cover_url, welcome_note, closed_message, gst_pct, service_pct,
         tip_options, upi_id: upi_id.trim(), upi_name, pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url,
         max_discount_pct, stations: stationList } });
+      const { legal_name, bill_address, gstin, fssai, sac, gst_composition, invoice_prefix, bill_footer, receipt_width } = s;
+      const billing = () => rpc("owner_save_bill_settings", { p: { legal_name, bill_address, gstin: gstin.trim().toUpperCase(), fssai: fssai.trim(), sac: sac.trim(),
+        gst_composition, invoice_prefix: invoice_prefix.trim().toUpperCase(), bill_footer, receipt_width } });
+      // leaving the composition scheme: bill details first, so GST can be switched back on
+      if (saved && saved.gst_composition && !gst_composition) { await billing(); await general(); } else { await general(); await billing(); }
       const next = { ...s, tip_options, stations: stationList }; setS(next); setSaved(next); setTips(tip_options.join(", ")); setStations(stationList.join(", "));
       toast("Settings saved"); reload();
     } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
@@ -77,6 +82,30 @@ export function SettingsScreen() {
             <Input value={tips} onChange={e => setTips(e.target.value.replace(/[^\d,\s]/g, ""))} /></Field>
           <Field label="Manager discount limit %" hint="Managers can take up to this much off a bill. You (the owner) can give more.">
             <Input inputMode="decimal" className="num" value={String(s.max_discount_pct ?? 20)} onChange={e => set("max_discount_pct", num(e.target.value))} /></Field>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Bills" sub="What a printed bill shows. GST bills need your GSTIN; every bill shows your FSSAI licence number." />
+        <div className="grid gap-4 px-5 pb-5 sm:grid-cols-2">
+          <Field label="Legal name" hint="As on your GST registration"><Input value={s.legal_name ?? ""} maxLength={120} onChange={e => set("legal_name", e.target.value)} /></Field>
+          <Field label="GSTIN" hint="15 characters. Leave empty if you aren't registered for GST.">
+            <Input value={s.gstin ?? ""} maxLength={15} className="uppercase" onChange={e => set("gstin", e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ""))} /></Field>
+          <div className="sm:col-span-2"><Field label="Address on the bill"><Textarea value={s.bill_address ?? ""} maxLength={300} className="min-h-16" onChange={e => set("bill_address", e.target.value)} /></Field></div>
+          <Field label="FSSAI licence number" hint="14 digits"><Input inputMode="numeric" value={s.fssai ?? ""} maxLength={14} onChange={e => set("fssai", e.target.value.replace(/\D/g, ""))} /></Field>
+          <Field label="Bill number prefix" hint={`Up to 5 letters. Bills are numbered like ${(s.invoice_prefix || "").toUpperCase()}2627-0001 and start again each 1 April.`}>
+            <Input value={s.invoice_prefix ?? ""} maxLength={5} className="uppercase" onChange={e => set("invoice_prefix", e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ""))} /></Field>
+          <Field label="SAC code" hint="996331 for restaurant service"><Input inputMode="numeric" value={s.sac ?? "996331"} maxLength={8} onChange={e => set("sac", e.target.value.replace(/\D/g, ""))} /></Field>
+          <Field label="Receipt paper">
+            <select value={s.receipt_width ?? 80} onChange={e => set("receipt_width", Number(e.target.value) as 58 | 80)} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm text-fg">
+              <option value={80}>80 mm roll (most counter printers)</option><option value={58}>58 mm roll (small printers)</option>
+            </select></Field>
+          <div className="sm:col-span-2"><Field label="Line at the bottom of the bill"><Input value={s.bill_footer ?? ""} maxLength={160} onChange={e => set("bill_footer", e.target.value)} /></Field></div>
+          <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3 sm:col-span-2">
+            <span><span className="block text-sm font-semibold text-fg">GST composition scheme</span>
+              <span className="text-[12px] text-fg-2">Tick only if you pay GST under the composition scheme. Bills then print as a Bill of supply and no GST is charged (set GST % to 0).</span></span>
+            <Switch checked={!!s.gst_composition} onChange={v => { set("gst_composition", v); if (v) set("gst_pct", 0); }} label="GST composition scheme" />
+          </label>
         </div>
       </Card>
 

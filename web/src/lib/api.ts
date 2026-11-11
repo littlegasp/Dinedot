@@ -74,6 +74,8 @@ export class ApiError extends Error { status?: number; offline?: boolean }
 
 /** Calls a database function. Errors carry the database's own plain-language message. */
 export async function rpc<T>(fn: string, args: object = {}, retried = false): Promise<T> {
+  // the phone knows it has no connection: say so at once (the POS then keeps the order on the device)
+  if (typeof navigator !== "undefined" && navigator.onLine === false) { const e = new ApiError("No internet. Check the connection."); e.offline = true; throw e; }
   if (isDemo()) return (await demo()).rpc(fn, args) as Promise<T>;
   session ??= read<Session>(SESSION);
   await fresh();

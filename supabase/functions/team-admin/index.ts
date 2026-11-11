@@ -5,7 +5,8 @@
 // gives the key to this function by itself; it is never in the repo or the app.
 // The function only acts for a signed-in, active owner, checked through the database.
 //
-// Many restaurants (0004): a new login joins the owner's current restaurant. Changing a
+// Many restaurants (0004): a new login joins the owner's current restaurant. An email that
+// already has a login is added to this team (0006); that person keeps their own password. Changing a
 // login's email or password, or deleting it, is allowed only when the owner controls that
 // login (it works nowhere the owner doesn't own); otherwise only this team's entry changes.
 //
@@ -16,7 +17,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 
 const MIN_PASSWORD = 8;
 const UUID = /^[0-9a-f-]{36}$/i;
-const ROLES = ["owner", "manager", "waiter", "kitchen"];
+const ROLES = ["owner", "manager", "cashier", "waiter", "kitchen"];
 const roleOf = (r: string) => (ROLES.includes(r) ? r : "waiter");
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -73,7 +74,20 @@ export async function handle(req: Request, env: (k: string) => string | undefine
     // app_metadata can only be set with the service key, so the database can trust it
     const app_metadata = me.restaurant_id ? { restaurant_id: me.restaurant_id } : undefined;
     const { data, error } = await admin.auth.admin.createUser({ email, password: pw, email_confirm: true, user_metadata: { full_name: name }, app_metadata });
-    if (error || !data.user) return reply(400, { error: /already|exists|registered/i.test(error?.message ?? "") ? "That email already has a login." : error?.message ?? "Couldn't add the login." });
+    if (error && /already|exists|registered/i.test(error.message ?? "")) {
+      // They already have a DineOS login (another restaurant, or an earlier team): add them to this
+      // team instead. Their password stays theirs; the one typed here is not used.
+      const { data: who } = await admin.from("staff").select("id").eq("email", email).maybeSingle();
+      if (!who?.id || !me.restaurant_id) return reply(400, { error: "That email already has a login, but it couldn't be found. Try again." });
+      const { error: me2 } = await admin.from("memberships").insert({ restaurant_id: me.restaurant_id, user_id: who.id, role: "waiter", active: false, name });
+      if (me2 && !/duplicate/i.test(me2.message)) return fail(me2);
+      if (me2) return reply(400, { error: "That person is already on your team." });
+      const { error: e3 } = await asOwner.rpc("owner_edit_staff", { p_id: who.id, p_name: name, p_phone: s("phone"), p_role: role, p_active: true });
+      if (e3) return reply(400, { error: `Added to the team, but setting it up failed: ${e3.message}` });
+      await asOwner.rpc("owner_log", { p_action: "login_added", p_detail: `${name} (${role}, existing login)` });
+      return reply(200, { ok: true, id: who.id, existing: true });
+    }
+    if (error || !data.user) return reply(400, { error: error?.message ?? "Couldn't add the login." });
     // New logins start switched off as waiters; set them up as asked, switched on.
     const { error: e2 } = await asOwner.rpc("owner_edit_staff", { p_id: data.user.id, p_name: name, p_phone: s("phone"), p_role: role, p_active: true });
     if (e2) return reply(400, { error: `Login added, but setting it up failed: ${e2.message}` });

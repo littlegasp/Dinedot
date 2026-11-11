@@ -1,7 +1,7 @@
 /* Shapes returned by the database functions (supabase/migrations). Kept in one place so
    every screen reads the same names. Money values are always worked out by the database. */
 
-export type Role = "owner" | "manager" | "waiter" | "kitchen";
+export type Role = "owner" | "manager" | "cashier" | "waiter" | "kitchen";
 export type Diet = "veg" | "nonveg" | "egg";
 export type OrderStatus = "new" | "cooking" | "ready" | "served" | "cancelled";
 export type VisitStatus = "open" | "bill" | "paid" | "void";
@@ -74,7 +74,7 @@ export type GuestMenu = {
 };
 export type GuestState = {
   now: string;
-  last_paid: { id: string; paid_at: string; total: number; reviewed: boolean } | null;
+  last_paid: { id: string; paid_at: string; total: number; reviewed: boolean; receipt?: import("./receipt").Receipt } | null;
   visit: null | {
     id: string; status: VisitStatus; guests: number | null; split: number; tip_pct: number; pay_choice: string;
     orders: Order[]; calls: { kind: string; at: string; seen: boolean }[]; bill: Bill;
@@ -90,12 +90,14 @@ export type Settings = {
   upi_id: string; upi_name: string; gst_pct: number; service_pct: number; tip_options: number[];
   pay_cash: boolean; pay_card: boolean; pay_upi: boolean; google_review_url: string; welcome_note: string;
   stations: string[]; max_discount_pct: number;
+  legal_name: string; bill_address: string; gstin: string; fssai: string; sac: string; gst_composition: boolean;
+  invoice_prefix: string; bill_footer: string; receipt_width: 58 | 80;
 };
 
 export type TeamMember = { id: string; name: string; email: string; phone: string; role: Role; active: boolean; created_at: string };
 
 export type BillRow = {
-  id: string; table: string; kind?: "dine_in" | "takeaway"; discount?: number; opened_at: string; paid_at: string | null; status: "paid" | "void"; method: PayMethod | null;
+  id: string; table: string; kind?: "dine_in" | "takeaway"; discount?: number; invoice_no?: string | null; gst?: number; opened_at: string; paid_at: string | null; status: "paid" | "void"; method: PayMethod | null;
   total: number; tip: number; guests: number | null; void_reason: string; by: string | null; bill: Bill; ref: string | null; stars: number | null;
 };
 

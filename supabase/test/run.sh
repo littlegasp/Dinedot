@@ -3,7 +3,7 @@
 # Usage:  PGHOST=localhost PGPORT=5432 PGUSER=postgres supabase/test/run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-MIG=(../migrations/0001_init.sql ../migrations/0002_cover_photo.sql ../migrations/0003_hardening.sql ../migrations/0004_restaurants.sql ../migrations/0005_pos_kitchen_close.sql)
+MIG=(../migrations/0001_init.sql ../migrations/0002_cover_photo.sql ../migrations/0003_hardening.sql ../migrations/0004_restaurants.sql ../migrations/0005_pos_kitchen_close.sql ../migrations/0006_bills_cashier.sql)
 
 fresh() {   # fresh <dbname>: empty database with the stub, every migration and the sample menu
   psql -q -v ON_ERROR_STOP=1 -c "drop database if exists $1" -c "create database $1" >/dev/null
@@ -16,6 +16,7 @@ fresh dd_t1 && psql -q -At -v ON_ERROR_STOP=1 -d dd_t1 -f test.sql | tail -1
 fresh dd_t2 && psql -q -At -v ON_ERROR_STOP=1 -d dd_t2 -f test_0003.sql | tail -1
 fresh dd_t4 && psql -q -At -v ON_ERROR_STOP=1 -d dd_t4 -f test_0004.sql | tail -1
 fresh dd_t5 && psql -q -At -v ON_ERROR_STOP=1 -d dd_t5 -f test_0005.sql | tail -1
+fresh dd_t6 && psql -q -At -v ON_ERROR_STOP=1 -d dd_t6 -f test_0006.sql | tail -1
 
 # R-01: two guests send the first order on one table at the same moment — both must succeed.
 fresh dd_race

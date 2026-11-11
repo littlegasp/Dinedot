@@ -1,6 +1,9 @@
 "use client";
 import * as React from "react";
-import { Sparkles } from "lucide-react";
+import { Compass, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/overlay";
+import { resetTours } from "@/components/shell/Tour";
 import { Card } from "@/components/ui/primitives";
 import { GUIDE, WHATS_NEW } from "@/content/guide";
 import { NAV, type Route } from "@/lib/routes";
@@ -8,7 +11,7 @@ import { useStaff } from "@/lib/staff";
 import { cn } from "@/lib/utils";
 
 export function HelpScreen({ focus }: { focus?: string | null }) {
-  const { role } = useStaff();
+  const { role, me } = useStaff();
   const mine = NAV.filter(n => role && n.roles.includes(role) && n.route !== "help");
   const [sel, setSel] = React.useState<Route | "new">((mine.find(n => n.route === focus)?.route) ?? "new");
   const s = sel === "new" ? null : GUIDE[sel];
@@ -18,6 +21,8 @@ export function HelpScreen({ focus }: { focus?: string | null }) {
       <nav aria-label="Help topics" className="-mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-col lg:gap-0.5 lg:px-0">
         <Topic on={sel === "new"} onClick={() => setSel("new")}><Sparkles className="size-4" aria-hidden />What&apos;s new</Topic>
         {mine.map(n => <Topic key={n.route} on={sel === n.route} onClick={() => setSel(n.route)}><n.Icon className="size-4" aria-hidden />{n.label}</Topic>)}
+        {me && <Button size="sm" variant="ghost" className="shrink-0 justify-start lg:mt-2" onClick={() => { resetTours(me.id); toast("Tours are back. Open any screen to see its tour."); }}>
+          <Compass />Show the tours again</Button>}
       </nav>
       <Card className="p-6">
         {s ? (

@@ -64,6 +64,10 @@ try {
   await pay.getByRole("button", { name: /Mark paid/ }).click();
   await w.getByText(/Paid · table T2 is free/).waitFor();
   ok("waiter (phone) clears the call, serves and takes UPI with a reference");
+  await w.getByRole("dialog", { name: /CP?\d{4}-0001|· \d{4}-0001/ }).waitFor();
+  await w.keyboard.press("Escape");
+  if (!/^\d{4}-0001$/.test(sql("select invoice_no from visits where invoice_no is not null"))) throw new Error("invoice number wrong: " + sql("select invoice_no from visits"));
+  ok("the paid bill got invoice number " + sql("select invoice_no from visits where invoice_no is not null") + " and its bill opened");
   const row = sql("select method || '|' || amount || '|' || reference from payments");
   if (row !== "upi|304.50|412345678901" && !/^upi\|\d+(\.\d+)?\|412345678901$/.test(row)) throw new Error("payment row wrong: " + row);
   ok(`payments table has the payment (${row})`);

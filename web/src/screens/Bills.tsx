@@ -1,12 +1,13 @@
 "use client";
 import * as React from "react";
-import { Download, ScrollText, Star } from "lucide-react";
+import { Download, Printer, ScrollText, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState, Input, Segmented, Skeleton } from "@/components/ui/primitives";
 import { Sheet, toast } from "@/components/ui/overlay";
 import { rpc } from "@/lib/api";
 import type { BillRow } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
+import { ReceiptDialog } from "./ReceiptDialog";
 
 const ist = (d: Date) => new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);   // the database counts days in India time
 const METHOD: Record<string, string> = { upi: "UPI", card: "Card", cash: "Cash", mixed: "Split" };
@@ -18,6 +19,7 @@ export function BillsScreen() {
   const [to, setTo] = React.useState(ist(new Date()));
   const [rows, setRows] = React.useState<BillRow[] | null>(null);
   const [open, setOpen] = React.useState<BillRow | null>(null);
+  const [print, setPrint] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const now = new Date(), day = 864e5;
@@ -34,8 +36,8 @@ export function BillsScreen() {
   const total = paid.reduce((s, r) => s + Number(r.total), 0);
   const download = () => {
     const esc = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const csv = [["Table", "Opened", "Paid at", "Status", "Method", "Payments", "Discount", "Total", "Tip", "Guests", "Reference", "Closed by", "Reason", "Rating"].join(","),
-      ...(rows ?? []).map(r => [r.table, new Date(r.opened_at).toLocaleString("en-IN"), r.paid_at ? new Date(r.paid_at).toLocaleString("en-IN") : "", r.status,
+    const csv = [["Bill no", "Table", "Opened", "Paid at", "Status", "Method", "Payments", "Discount", "Total", "Tip", "Guests", "Reference", "Closed by", "Reason", "Rating"].join(","),
+      ...(rows ?? []).map(r => [r.invoice_no, r.table, new Date(r.opened_at).toLocaleString("en-IN"), r.paid_at ? new Date(r.paid_at).toLocaleString("en-IN") : "", r.status,
         r.method ? METHOD[r.method] : "", (r.bill.payments ?? []).map(p => `${METHOD[p.method]} ${p.amount}`).join(" + "), r.discount ?? 0,
         r.total, r.tip, r.guests, r.ref, r.by, r.void_reason, r.stars].map(esc).join(","))].join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `bills-${from}${from !== to ? `-to-${to}` : ""}.csv`; a.click();
@@ -63,7 +65,7 @@ export function BillsScreen() {
               <span className={cn("font-display shrink-0 font-extrabold text-fg", r.kind === "takeaway" ? "w-12 text-[13px] leading-tight" : "w-12 text-lg")}>{r.table}</span>
               <span className="min-w-0 flex-1 text-[13px] text-fg-2">
                 {new Date(r.paid_at ?? r.opened_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
-                {r.by ? ` · ${r.by}` : ""}{r.ref ? ` · ref ${r.ref}` : ""}
+                {r.invoice_no ? ` · ${r.invoice_no}` : ""}{r.by ? ` · ${r.by}` : ""}{r.ref ? ` · ref ${r.ref}` : ""}
               </span>
               {r.stars && <span className="hidden items-center gap-0.5 text-[13px] text-fg-2 sm:flex"><Star className="size-3.5 fill-coral text-coral" aria-hidden />{r.stars}</span>}
               {r.status === "paid" ? <Badge tone="success">{r.method ? METHOD[r.method] : "Paid"}</Badge> : <Badge tone="danger">Cleared</Badge>}
@@ -72,6 +74,7 @@ export function BillsScreen() {
           ))}
         </Card>
       )}
+      <ReceiptDialog open={!!print} onOpenChange={o => !o && setPrint(null)} visitId={print} />
       <Sheet open={!!open} onOpenChange={o => !o && setOpen(null)} title={open ? (open.kind === "takeaway" ? `Takeaway · ${open.table}` : `Table ${open.table}`) : ""}
         description={open ? new Date(open.paid_at ?? open.opened_at).toLocaleString("en-IN") : undefined}>
         {open && (
@@ -94,7 +97,9 @@ export function BillsScreen() {
               {open.by && <Row k="Closed by" v={open.by} />}
               {open.guests ? <Row k="Guests" v={String(open.guests)} /> : null}
               {open.stars ? <Row k="Guest rating" v={`${open.stars} of 5`} /> : null}
+              {open.invoice_no && <Row k="Bill no" v={open.invoice_no} />}
             </dl>
+            {open.status === "paid" && <Button variant="ink" onClick={() => setPrint(open.id)}><Printer />Print or share the bill</Button>}
           </div>
         )}
       </Sheet>

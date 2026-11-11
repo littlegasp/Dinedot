@@ -30,6 +30,12 @@ try {
   await signIn(staff, "Kitchen");
   await staff.getByRole("heading", { name: "Kitchen" }).waitFor();
   ok("kitchen signs in and lands on the kitchen screen");
+  const tour = staff.getByRole("region", { name: "Tour: Kitchen" });
+  await tour.getByRole("button", { name: "Next tip" }).click();
+  await tour.getByText(/2 of/).waitFor();
+  await tour.getByRole("button", { name: "Skip all tours" }).click();
+  await tour.waitFor({ state: "detached" });
+  ok("first-time tour shows the kitchen steps and can be skipped");
 
   // Guest on table T3
   const guest = await ctx.newPage(); watch(guest);
@@ -82,10 +88,20 @@ try {
   await pay.getByText(/Give back/).waitFor();
   await pay.getByRole("button", { name: /Mark paid/ }).click();
   await staff.getByText(/Paid · table T3 is free/).waitFor();
-  ok("waiter takes cash, sees the change, table is freed");
+  const rcpt = staff.getByRole("dialog", { name: /Tax invoice · CP\d{4}-\d{4}/ });
+  await rcpt.waitFor();
+  await rcpt.frameLocator("iframe").getByText("GSTIN: 27ABCDE1234F1Z5").waitFor();
+  await rcpt.frameLocator("iframe").getByText(/CGST 2\.5%/).waitFor();
+  await rcpt.frameLocator("iframe").getByText(/FSSAI Lic\. No/).waitFor();
+  await staff.keyboard.press("Escape");
+  ok("waiter takes cash, sees the change, table is freed; the GST bill opens with its number, CGST/SGST and FSSAI");
 
   // Guest can now rate
   await guest.getByText("How was it?").waitFor({ timeout: 10000 });
+  await guest.getByRole("button", { name: "View or share your bill" }).click();
+  await guest.getByRole("dialog", { name: /Tax invoice · CP/ }).getByRole("button", { name: "Share" }).waitFor();
+  if (await guest.getByRole("dialog").getByRole("button", { name: "Print" }).count()) throw new Error("guests shouldn't get the printer button");
+  await guest.keyboard.press("Escape");
   await guest.getByRole("radio", { name: "5 stars" }).click();
   await guest.getByRole("button", { name: "Send" }).click();
   await guest.getByText("Thank you!").waitFor();
@@ -105,6 +121,21 @@ try {
   await staff.getByText(/Sent to the kitchen · T8/).waitFor();
   await staff.locator("#ticket").getByText("Already ordered").waitFor();
   ok("POS sends a dine-in order with a size, bill comes back from the server");
+
+  // ---- 0006: an order sent with no internet waits on the device, then goes by itself ----
+  await staff.getByRole("radio", { name: /^T5/ }).click();
+  await staff.getByRole("button", { name: /Dal Makhani/ }).first().click();
+  const dm = staff.getByRole("dialog"); if (await dm.isVisible().catch(() => false)) await dm.getByRole("button", { name: /^Add ·/ }).click();
+  await ctx.setOffline(true);
+  await staff.locator("#ticket").getByRole("button", { name: "Send" }).click();
+  await staff.getByText(/saved on this device/).first().waitFor();
+  await staff.locator("#ticket").getByText(/1 order waiting for the connection: T5/).waitFor();
+  await ctx.setOffline(false);
+  await staff.evaluate(() => window.dispatchEvent(new Event("online")));
+  await staff.getByText(/Sent to the kitchen · T5 \(saved while offline\)/).waitFor({ timeout: 20000 });
+  await staff.locator("#ticket").getByText(/waiting for the connection/).waitFor({ state: "detached" });
+  await staff.locator("#ticket").getByText("Already ordered").waitFor();
+  ok("POS: no internet, order kept on the device and sent once the connection is back");
 
   // ---- 0005: takeaway token, discount, split payment ----
   await staff.getByRole("radio", { name: "Takeaway", exact: true }).click();
@@ -221,6 +252,17 @@ try {
   await staff.getByText(/Print QR codes prints one card per table/).waitFor();
   ok("help: what's new and the Tables & QR guide");
 
+  // ---- 0006: bill settings, cashier ----
+  await nav("settings");
+  await staff.getByLabel("GSTIN").fill("27ABC");
+  await staff.getByRole("button", { name: "Save changes" }).click();
+  await staff.getByText(/Check the GSTIN/).waitFor();
+  await staff.getByLabel("GSTIN").fill("27ABCDE1234F1Z5");
+  await staff.getByLabel("Bill number prefix").fill("TCP");
+  await staff.getByRole("button", { name: "Save changes" }).click();
+  await staff.getByText("Settings saved").waitFor();
+  ok("settings: a wrong GSTIN is refused; bill prefix saved");
+
   // ---- 0005: team notice and closing the day ----
   await nav("today");
   await staff.getByLabel("Team notice").fill("Biryani is off tonight.");
@@ -251,6 +293,14 @@ try {
   await rc.getByRole("button", { name: "Reopen day" }).click();
   await staff.getByText("Day reopened").waitFor();
   ok("today: owner reopens the day with a reason");
+
+  await signIn(staff, "Cashier");
+  await staff.getByRole("heading", { name: "POS & billing" }).waitFor();
+  if (await staff.getByRole("link", { name: "Today" }).count() + await staff.getByRole("button", { name: "Today", exact: true }).count()) throw new Error("cashier sees Today");
+  await staff.getByRole("button", { name: /Calls from tables/ }).click();
+  await staff.getByRole("dialog").getByRole("switch", { name: "Sound alerts" }).waitFor();
+  await staff.keyboard.press("Escape");
+  ok("cashier signs in and lands on the POS; alert settings are in the bell");
 
   if (errors.length) throw new Error("Page errors:\n" + [...new Set(errors)].join("\n"));
   console.log(`DINEOS JOURNEY PASSED (${W}px)`);
