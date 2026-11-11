@@ -36,7 +36,7 @@ export function receiptHtml(r: Receipt): string {
   h1 { font-size: 1.35em; margin: 0; text-align: center; } p { margin: 0; }
   .c { text-align: center; } .r { text-align: right; white-space: nowrap; } .b { font-weight: 700; } .s { font-size: .9em; }
   .t { margin: 2mm 0 1mm; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 1mm 0; }
-  table { width: 100%; border-collapse: collapse; } td, th { padding: .3mm 0; vertical-align: top; } th { text-align: left; font-weight: 700; border-bottom: 1px dashed #000; }
+  table { width: 100%; border-collapse: collapse; } td, th { padding: .3mm 0; vertical-align: top; } td + td, th + th { padding-left: 2.5mm; } th { text-align: left; font-weight: 700; border-bottom: 1px dashed #000; }
   .line td { border-top: 1px dashed #000; padding-top: 1mm; } .big td { font-size: 1.25em; font-weight: 700; }
   hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
 </style></head><body>
