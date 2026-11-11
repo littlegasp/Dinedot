@@ -36,4 +36,4 @@ TEST_USERS='{"owner@copper.test":"50000000-0000-4000-8000-000000000001","waiter@
 trap 'kill $P1 $P2 2>/dev/null' EXIT
 sleep 2
 T2=$(psql -At -d $DB -c "select token from dining_tables where code = 'T2'")
-DB=$DB node tests/real/journey.mjs "http://localhost:$PORT/" "$T2"
+DB=$DB SECRET="$SECRET" node tests/real/journey.mjs "http://localhost:$PORT/" "$T2"

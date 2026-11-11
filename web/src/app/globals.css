@@ -108,3 +108,13 @@ h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.015em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* QR print sheet (Tables & QR → Print QR codes): only the cards go on paper */
+.print-sheet { display: none; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body * { visibility: hidden !important; }
+  .print-sheet, .print-sheet * { visibility: visible !important; }
+  .print-sheet { display: grid !important; position: absolute; inset: 0; grid-template-columns: repeat(3, 1fr); gap: 6mm; background: #fff; color: #171b24; }
+  .qr-card { break-inside: avoid; border: 1px dashed #b8bec8; border-radius: 4mm; padding: 6mm 4mm; text-align: center; }
+}

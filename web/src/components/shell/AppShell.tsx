@@ -1,25 +1,17 @@
 "use client";
 import * as React from "react";
 import { Command } from "cmdk";
-import { Bell, BellRing, Building2, ChefHat, Droplets, LayoutDashboard, LayoutGrid, LifeBuoy, LogOut, Moon, Receipt, RefreshCw, Search, Smartphone, Sun, WifiOff } from "lucide-react";
+import { Bell, BellRing, Building2, Droplets, LayoutGrid, LifeBuoy, LogOut, Menu as MenuIcon, Moon, Receipt, RefreshCw, Search, Smartphone, Sun, WifiOff } from "lucide-react";
+import { NAV, type Route } from "@/lib/routes";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/primitives";
-import { Dialog, toast } from "@/components/ui/overlay";
+import { Dialog, Sheet, toast } from "@/components/ui/overlay";
 import { useStaff, minutesSince, useAction } from "@/lib/staff";
 import { rpc } from "@/lib/api";
-import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type Route = "today" | "pos" | "floor" | "kitchen" | "design";
-
-export const NAV: { route: Route; label: string; short: string; Icon: typeof Bell; roles: Role[] }[] = [
-  { route: "today", label: "Today", short: "Today", Icon: LayoutDashboard, roles: ["owner", "manager"] },
-  { route: "pos", label: "POS & billing", short: "POS", Icon: Receipt, roles: ["owner", "manager", "waiter"] },
-  { route: "floor", label: "Floor", short: "Floor", Icon: LayoutGrid, roles: ["owner", "manager", "waiter"] },
-  { route: "kitchen", label: "Kitchen", short: "Kitchen", Icon: ChefHat, roles: ["owner", "manager", "waiter", "kitchen"] },
-];
-export const HOME: Record<Role, Route> = { owner: "today", manager: "today", waiter: "floor", kitchen: "kitchen" };
+export { NAV, HOME, type Route } from "@/lib/routes";
 export const CALL_LABEL = { waiter: "called a waiter", water: "asked for water", bill: "asked for the bill", help: "needs help" } as const;
 export const CALL_ICON = { waiter: BellRing, water: Droplets, bill: Receipt, help: LifeBuoy } as const;
 
@@ -58,6 +50,9 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
   const [bell, setBell] = React.useState(false);
   const stale = useNewVersion();
   const nav = NAV.filter(n => role && n.roles.includes(role));
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const primary = nav.filter(n => n.group === "service").slice(0, 4);
+  const more = nav.filter(n => !primary.includes(n));
   const calls = live?.calls ?? [];
   const tableName = (id: string) => live?.tables.find(t => t.id === id)?.code ?? "";
   const newOrders = live?.visits.flatMap(v => v.orders).filter(o => o.status === "new").length ?? 0;
@@ -90,15 +85,24 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
             )}
           </div>
         </div>
-        <nav aria-label="Main" className="flex-1 space-y-0.5 overflow-auto px-3">
-          {nav.map(n => (
-            <button key={n.route} onClick={() => go(n.route)} aria-current={route === n.route ? "page" : undefined}
-              className={cn("flex h-10 w-full items-center gap-3 rounded-[var(--radius)] px-3 text-sm font-semibold text-fg-2 hover:bg-muted hover:text-fg",
-                route === n.route && "bg-ink text-surface hover:bg-ink hover:text-surface")}>
-              <n.Icon className="size-[18px]" aria-hidden />{n.label}
-              {n.route === "kitchen" && newOrders > 0 && <span className="ml-auto rounded-full bg-coral px-1.5 text-[11px] font-bold text-[#171b24]" aria-label={`${newOrders} new`}>{newOrders}</span>}
-            </button>
-          ))}
+        <nav aria-label="Main" className="flex-1 space-y-0.5 overflow-auto px-3 pb-3">
+          {(["service", "manage", "help"] as const).map(g => {
+            const items = nav.filter(n => n.group === g);
+            if (!items.length) return null;
+            return (
+              <div key={g} className="pt-1">
+                {g !== "service" && <p className="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wider text-fg-2">{g === "manage" ? "Manage" : "Support"}</p>}
+                {items.map(n => (
+                  <button key={n.route} onClick={() => go(n.route)} aria-current={route === n.route ? "page" : undefined}
+                    className={cn("flex h-10 w-full items-center gap-3 rounded-[var(--radius)] px-3 text-sm font-semibold text-fg-2 hover:bg-muted hover:text-fg",
+                      route === n.route && "bg-ink text-surface hover:bg-ink hover:text-surface")}>
+                    <n.Icon className="size-[18px]" aria-hidden />{n.label}
+                    {n.route === "kitchen" && newOrders > 0 && <span className="ml-auto rounded-full bg-coral px-1.5 text-[11px] font-bold text-[#171b24]" aria-label={`${newOrders} new`}>{newOrders}</span>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
           {demo && (
             <a href="t.html?k=demo-T3" target="_blank" rel="noopener" className="flex h-10 w-full items-center gap-3 rounded-[var(--radius)] px-3 text-sm font-semibold text-fg-2 hover:bg-muted hover:text-fg">
               <Smartphone className="size-[18px]" aria-hidden />Guest QR page (T3)
@@ -159,14 +163,38 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
       </main>
 
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {nav.map(n => (
+        {primary.map(n => (
           <button key={n.route} onClick={() => go(n.route)} aria-current={route === n.route ? "page" : undefined}
             className={cn("flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold text-fg-2", route === n.route && "text-fg")}>
             <span className={cn("grid h-7 w-12 place-items-center rounded-full", route === n.route && "bg-coral-soft text-coral-strong")}><n.Icon className="size-5" aria-hidden /></span>
             {n.short}
           </button>
         ))}
+        {more.length > 0 && (
+          <button onClick={() => setMoreOpen(true)} aria-current={more.some(n => n.route === route) ? "page" : undefined}
+            className={cn("flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold text-fg-2", more.some(n => n.route === route) && "text-fg")}>
+            <span className={cn("grid h-7 w-12 place-items-center rounded-full", more.some(n => n.route === route) && "bg-coral-soft text-coral-strong")}><MenuIcon className="size-5" aria-hidden /></span>
+            More
+          </button>
+        )}
       </nav>
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen} title="More" description={live?.settings.name}>
+        <div className="grid grid-cols-3 gap-2">
+          {more.map(n => (
+            <button key={n.route} onClick={() => { setMoreOpen(false); go(n.route); }}
+              className={cn("flex h-20 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-lg)] border border-border bg-surface text-[13px] font-semibold text-fg", route === n.route && "border-ink")}>
+              <n.Icon className="size-5 text-fg-2" aria-hidden />{n.short}
+            </button>
+          ))}
+        </div>
+        {restaurants.length > 1 && (
+          <select aria-label="Restaurant" value={me?.restaurant_id ?? ""} onChange={e => switchTo(e.target.value)}
+            className="mt-4 h-11 w-full rounded-[var(--radius)] border border-border bg-surface px-3 text-sm font-semibold text-fg">
+            {restaurants.filter(r => r.active).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
+        <Button className="mt-4 w-full" onClick={signOut}><LogOut />Sign out · {me?.name}</Button>
+      </Sheet>
 
       <Dialog open={bell} onOpenChange={setBell} title="Calls from tables" description="Guests asking for a waiter, water or the bill. Done clears it for everyone.">
         {calls.length === 0 ? <p className="py-6 text-center text-sm text-fg-2">No one is waiting.</p> : (

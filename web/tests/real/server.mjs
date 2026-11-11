@@ -36,6 +36,7 @@ createServer(async (req, res) => {
       const exp = Math.floor(Date.now() / 1000) + 3600;
       return send(200, { access_token: jwt({ sub: id, role: "authenticated", exp }, secret), refresh_token: email, expires_in: 3600, expires_at: exp, user: { email } });
     }
+    if (url.pathname.endsWith("/user") && req.method === "PUT") return send(200, { id: "ok" });   // set a new password
     return send(200, {});
   }
   const file = normalize(join(outDir, url.pathname === "/" ? "index.html" : url.pathname));

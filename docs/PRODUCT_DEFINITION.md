@@ -1,6 +1,6 @@
 # DineOS: product definition (v1)
 
-Status: **prototype approved 11 Nov 2026; Phase 3 database (0004) done; Phase 4 screens on live data done (sign-in, restaurant setup, Today, POS, Floor, Kitchen, guest page). Next: 0005 for discounts, takeaway, split payments, stations, daily close.** Branch `dineos`. Nothing here is live yet;
+Status: **prototype approved 11 Nov 2026; Phase 3 database (0004) done; Phase 4 screens on live data done (sign-in, restaurant setup, Today, POS, Floor, Kitchen, guest page); Phase 5a admin screens done (Menu, Tables & QR, Team, Settings, Bills, Help, password reset). Live at dineos.littlegasp-orders.workers.dev on its own Supabase project. Next: 0005 for discounts, takeaway, split payments, stations, daily close.** Branch `dineos`. Nothing here is live yet;
 the current Dinedot app on `main` keeps running unchanged until DineOS replaces it.
 
 ## Decisions (agreed 11 Nov 2026)

@@ -105,6 +105,74 @@ try {
   await staff.locator("#ticket").getByText("Already ordered").waitFor();
   ok("POS sends a dine-in order with a size, bill comes back from the server");
 
+  // ---- Manage screens (owner) ----
+  const nav = async (route) => { await staff.goto(BASE + "#/" + route); await staff.waitForTimeout(300); };
+  await nav("menu");
+  await staff.getByRole("heading", { name: "Menu", exact: true }).waitFor();
+  await staff.getByRole("button", { name: "Add dish" }).click();
+  const dish = staff.getByRole("dialog");
+  await dish.getByLabel("Dish name").fill("Test Thali");
+  await dish.getByLabel("Price (₹)").fill("350");
+  await dish.getByRole("button", { name: "Add size" }).click();
+  await dish.getByLabel("Sizes name").fill("Mini");
+  await dish.getByLabel("Sizes price").fill("199");
+  await dish.getByRole("button", { name: "Save dish" }).click();
+  await staff.getByText("Dish saved").waitFor();
+  await staff.getByRole("switch", { name: /Test Thali: on the menu/ }).click();
+  await staff.getByText("Test Thali marked sold out").waitFor();
+  ok("menu: owner adds a dish with a size and marks it sold out");
+  await guest.goto(BASE + "t.html?k=demo-T5");
+  await guest.getByPlaceholder("Search the menu").fill("Test Thali");
+  await guest.locator("li", { hasText: "Test Thali" }).getByText("Sold out").waitFor();
+  ok("guest menu shows the new dish as sold out");
+
+  await nav("tables");
+  await staff.getByRole("button", { name: "Add table" }).click();
+  const tb = staff.getByRole("dialog");
+  await tb.getByLabel("Table number").fill("Z9");
+  await tb.getByLabel("Area").fill("Garden");
+  await tb.getByRole("button", { name: "Save table" }).click();
+  await staff.getByText("Table saved").waitFor();
+  await staff.getByRole("button", { name: /^Z9/ }).first().click();
+  await staff.getByRole("dialog").getByRole("img", { name: "QR code" }).waitFor();
+  const before = await staff.getByRole("dialog").getByRole("link", { name: "Open the guest page" }).getAttribute("href");
+  await staff.getByRole("dialog").getByRole("button", { name: "Replace QR" }).click();
+  await staff.getByRole("dialog").getByRole("button", { name: "Replace QR" }).last().click();
+  await staff.getByText("New QR made").waitFor();
+  await staff.waitForTimeout(300);
+  const after = await staff.getByRole("dialog").getByRole("link", { name: "Open the guest page" }).getAttribute("href");
+  if (!before || before === after) throw new Error("QR was not replaced");
+  await staff.keyboard.press("Escape");
+  ok("tables: add a table, see its QR, replace the QR");
+
+  await nav("settings");
+  await staff.getByLabel("Tagline").fill("Tested tagline");
+  await staff.getByRole("button", { name: "Save changes" }).click();
+  await staff.getByText("Settings saved").waitFor();
+  await guest.goto(BASE + "t.html?k=demo-T5");
+  await guest.getByText("Tested tagline").waitFor();
+  ok("settings: tagline saved and shown on the guest page");
+
+  await nav("team");
+  await staff.getByRole("button", { name: "Add login" }).click();
+  const tm = staff.getByRole("dialog");
+  await tm.getByLabel("Name").fill("Asha Test");
+  await tm.getByLabel("Email").fill("asha@demo.in");
+  await tm.getByLabel(/First password/).fill("password-123");
+  await tm.getByRole("button", { name: "Add login" }).click();
+  await staff.getByText(/Login added for Asha Test/).waitFor();
+  await staff.getByText("asha@demo.in").waitFor();
+  ok("team: owner adds a login");
+
+  await nav("bills");
+  await staff.locator("button", { hasText: "T3" }).filter({ hasText: "Cash" }).first().waitFor();
+  ok("bills: today's T3 cash bill is listed");
+  await nav("help");
+  await staff.getByRole("heading", { name: "What's new" }).waitFor();
+  await staff.getByRole("button", { name: "Tables & QR" }).last().click();
+  await staff.getByText(/Print QR codes prints one card per table/).waitFor();
+  ok("help: what's new and the Tables & QR guide");
+
   if (errors.length) throw new Error("Page errors:\n" + [...new Set(errors)].join("\n"));
   console.log(`DINEOS JOURNEY PASSED (${W}px)`);
 } catch (e) {

@@ -73,6 +73,58 @@ try {
   await s.locator("li", { hasText: "Paneer Tikka" }).first().waitFor({ timeout: 10000 });
   ok("Today shows the sale and the best seller from owner_report");
 
+  // Manage screens on the real database
+  await s.goto(BASE + "#/menu"); await s.getByRole("button", { name: "Add dish" }).click();
+  const dlg = s.getByRole("dialog");
+  await dlg.getByLabel("Dish name").fill("Real Test Dosa"); await dlg.getByLabel("Price (₹)").fill("150");
+  await dlg.getByRole("button", { name: "Save dish" }).click(); await s.getByText("Dish saved").waitFor();
+  await s.getByRole("switch", { name: /Real Test Dosa: on the menu/ }).click(); await s.getByText("Real Test Dosa marked sold out").waitFor();
+  if (sql("select available::text from items where name = 'Real Test Dosa'") !== "false") throw new Error("sold out not saved");
+  if (sql("select count(*) from activity_log where action = 'dish_added' and detail like 'Real Test Dosa%'") !== "1") throw new Error("dish_added not logged");
+  ok("menu: dish saved (and logged), sold-out switch saved in the database");
+
+  await s.goto(BASE + "#/tables"); await s.getByRole("button", { name: "Add table" }).click();
+  await s.getByRole("dialog").getByLabel("Table number").fill("R7"); await s.getByRole("dialog").getByRole("button", { name: "Save table" }).click();
+  await s.getByText("Table saved").waitFor();
+  const t1 = sql("select token from dining_tables where code = 'R7'");
+  await s.getByRole("button", { name: /^R7/ }).first().click();
+  await s.getByRole("dialog").getByRole("button", { name: "Replace QR" }).click();
+  await s.getByRole("dialog").getByRole("button", { name: "Replace QR" }).last().click(); await s.getByText("New QR made").waitFor();
+  if (sql("select token from dining_tables where code = 'R7'") === t1) throw new Error("token not replaced");
+  await s.keyboard.press("Escape");
+  ok("tables: table added, QR token replaced in the database");
+
+  await s.goto(BASE + "#/settings"); await s.getByLabel("Tagline").fill("Real tagline"); await s.getByLabel("GST %").fill("12");
+  await s.getByRole("button", { name: "Save changes" }).click(); await s.getByText("Settings saved").waitFor();
+  if (sql("select tagline || '|' || gst_pct from settings") !== "Real tagline|12.0" && !sql("select tagline || '|' || gst_pct from settings").startsWith("Real tagline|12")) throw new Error("settings not saved");
+  ok("settings: tagline and GST saved");
+
+  await s.goto(BASE + "#/team"); await s.getByRole("button", { name: /Waiter/ }).first().waitFor();
+  await s.locator("button", { hasText: "waiter@copper.test" }).click();
+  await s.getByRole("dialog").getByRole("radio", { name: "Manager" }).click();
+  await s.getByRole("dialog").getByRole("button", { name: "Save" }).click(); await s.getByText("Saved").first().waitFor();
+  if (sql("select m.role from memberships m join staff st on st.id = m.user_id where st.email = 'waiter@copper.test'") !== "manager") throw new Error("role not changed");
+  ok("team: role changed to manager (owner_edit_staff)");
+
+  await s.goto(BASE + "#/bills"); await s.locator("button", { hasText: "T2" }).filter({ hasText: "UPI" }).first().waitFor();
+  await s.locator("button", { hasText: "T2" }).first().click(); await s.getByRole("dialog").getByText("412345678901").waitFor();
+  await s.keyboard.press("Escape");
+  ok("bills: T2's UPI bill with its reference");
+
+  // Password reset link → set a new password
+  const { createHmac } = await import("node:crypto");
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const h = b64({ alg: "HS256", typ: "JWT" }), p = b64({ sub: "50000000-0000-4000-8000-000000000001", role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 });
+  const tok = `${h}.${p}.${createHmac("sha256", process.env.SECRET).update(`${h}.${p}`).digest("base64url")}`;
+  const r = await page(await browser.newContext());
+  await r.goto(`${BASE}#access_token=${tok}&refresh_token=owner@copper.test&expires_in=3600&type=recovery`);
+  await r.getByRole("heading", { name: "Set a new password" }).waitFor();
+  await r.getByLabel("New password").fill("another-pass-9"); await r.getByLabel("Type it again").fill("another-pass-9");
+  await r.getByRole("button", { name: "Save new password" }).click();
+  await r.getByRole("heading", { name: /Good (morning|afternoon|evening)/ }).waitFor();
+  if (r.url().includes("access_token")) throw new Error("token left in the address bar");
+  ok("password reset link opens Set a new password, then signs in (token removed from the address)");
+
   // Someone switched off sees "waiting"; with no restaurant they can start one
   const n = await page(await browser.newContext());
   await signIn(n, "newbie@x.test");

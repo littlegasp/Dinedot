@@ -95,3 +95,19 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
     </div>
   );
 }
+
+/* Switch (on / off) with its label; the word is read out, not just the colour ------------- */
+export function Switch({ checked, onChange, label, disabled, className }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean; className?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
+      className={cn("relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50", checked ? "bg-success" : "bg-border-strong", className)}>
+      <span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
+    </button>
+  );
+}
+
+/* Textarea matching Input --------------------------------------------------------------- */
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => (
+  <textarea ref={ref} className={cn("min-h-20 w-full rounded-[var(--radius)] border border-border bg-surface p-3 text-sm text-fg placeholder:text-fg-2 focus:border-blue", className)} {...p} />
+));
+Textarea.displayName = "Textarea";

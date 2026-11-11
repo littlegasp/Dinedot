@@ -78,3 +78,17 @@ export type GuestState = {
 };
 
 export type CartLine = { key: string; id: string; name: string; qty: number; size?: string; addons?: string[]; unit: number; note?: string };
+
+export type Settings = {
+  restaurant_name: string; tagline: string; currency: string; accent: string; cover_url: string;
+  accepting_orders: boolean; closed_message: string; wifi_name: string; wifi_password: string;
+  upi_id: string; upi_name: string; gst_pct: number; service_pct: number; tip_options: number[];
+  pay_cash: boolean; pay_card: boolean; pay_upi: boolean; google_review_url: string; welcome_note: string;
+};
+
+export type TeamMember = { id: string; name: string; email: string; phone: string; role: Role; active: boolean; created_at: string };
+
+export type BillRow = {
+  id: string; table: string; opened_at: string; paid_at: string | null; status: "paid" | "void"; method: PayMethod | null;
+  total: number; tip: number; guests: number | null; void_reason: string; by: string | null; bill: Bill; ref: string | null; stars: number | null;
+};

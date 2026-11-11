@@ -110,3 +110,28 @@ export function NoRestaurant() {
     </Frame>
   );
 }
+
+/** Opened from the "set a new password" email link (Auth.takeRecovery() kept its sign-in). */
+export function NewPassword({ onDone }: { onDone: () => void }) {
+  const [pw, setPw] = React.useState("");
+  const [pw2, setPw2] = React.useState("");
+  const [err, setErr] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <Frame>
+      <Card className="p-6">
+        <h1 className="text-2xl font-extrabold text-fg">Set a new password</h1>
+        <p className="mt-1 text-sm text-fg-2">At least 8 characters. You&apos;ll stay signed in on this device.</p>
+        <form className="mt-5 grid gap-4" onSubmit={async e => { e.preventDefault(); setErr("");
+          if (pw.length < 8) return setErr("Use at least 8 characters.");
+          if (pw !== pw2) return setErr("The two passwords don't match.");
+          setBusy(true); try { await Auth.setPassword(pw); onDone(); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); } }}>
+          <Field label="New password"><Input type="password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
+          <Field label="Type it again"><Input type="password" autoComplete="new-password" value={pw2} onChange={e => setPw2(e.target.value)} /></Field>
+          <Button type="submit" size="lg" variant="primary" disabled={busy}>{busy ? "Saving…" : "Save new password"}</Button>
+        </form>
+        {err && <p role="alert" className="mt-4 rounded-[var(--radius)] bg-danger-soft px-3 py-2 text-[13px] font-semibold text-danger">{err}</p>}
+      </Card>
+    </Frame>
+  );
+}

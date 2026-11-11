@@ -9,6 +9,7 @@ const SESSION = "dineos.session";
 type Session = { access_token: string; refresh_token: string; expires_at: number; email?: string };
 type DemoApi = {
   rpc: (fn: string, args: object) => Promise<unknown>;
+  teamAdmin: (body: object) => Promise<unknown>;
   user: () => { email: string } | null; signIn: (email: string) => void; signOut: () => void;
   reset: () => void; TEAM: { id: string; name: string; email: string; role: string }[];
 };
@@ -109,7 +110,72 @@ export const Auth = {
     if (isDemo()) return;
     await auth("recover", { email: email.trim(), redirect_to: location.href.split("#")[0] });
   },
+  /** A "set a new password" email link comes back as #access_token=…&type=recovery. */
+  takeRecovery(): boolean {
+    if (isDemo() || typeof location === "undefined") return false;
+    const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    if (h.get("type") !== "recovery" || !h.get("access_token")) return false;
+    keep({ access_token: h.get("access_token")!, refresh_token: h.get("refresh_token") ?? "", expires_in: Number(h.get("expires_in")) || 3600 });
+    history.replaceState(null, "", location.pathname + location.search);
+    return true;
+  },
+  async setPassword(password: string) {
+    if (isDemo()) return;
+    session ??= read<Session>(SESSION); await fresh();
+    await auth("user", { password }, "PUT");
+  },
 };
+
+/** Team logins (add, change, password, delete) go through the team-admin edge function,
+    which holds the service key on Supabase's side; the browser never sees it. */
+export async function teamAdmin(body: { action: "add" | "update" | "password" | "delete"; id?: string; name?: string; email?: string;
+  phone?: string; role?: string; active?: boolean; password?: string }) {
+  if (isDemo()) return (await demo()).teamAdmin(body);
+  session ??= read<Session>(SESSION); await fresh();
+  let r: Response;
+  try {
+    r = await fetch(`${URL_}/functions/v1/team-admin`, { method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + session?.access_token }, body: JSON.stringify(body) });
+  } catch { throw new ApiError("No internet. Check the connection."); }
+  if (r.status === 404) throw new ApiError("Adding logins isn't switched on yet: the team-admin function needs to be set up in Supabase.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ApiError(j.error || j.message || "Something went wrong.");
+  return j;
+}
+
+/* ---------- photos (Supabase Storage, bucket menu-photos) ---------- */
+/** Shrinks a photo in the browser to a JPEG no wider/taller than max px. */
+function shrink(file: File, max: number): Promise<Blob> {
+  return new Promise((ok, bad) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(b => (b ? ok(b) : bad(new Error("Couldn't read that photo."))), "image/jpeg", 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); bad(new Error("That file isn't a photo we can read.")); };
+    img.src = url;
+  });
+}
+/** Uploads into the restaurant's own folder (<restaurant id>/…), as the storage rules require. */
+export async function uploadPhoto(file: File, restaurantId: string, max = 1000): Promise<string> {
+  const blob = await shrink(file, isDemo() ? 640 : max);
+  if (isDemo()) return new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(blob); });
+  session ??= read<Session>(SESSION); await fresh();
+  const path = `${restaurantId}/dish-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+  const r = await fetch(`${URL_}/storage/v1/object/menu-photos/${path}`, { method: "POST",
+    headers: { apikey: KEY, Authorization: "Bearer " + session?.access_token, "Content-Type": "image/jpeg" }, body: blob });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new ApiError(j.message || j.error || "Photo upload failed."); }
+  return `${URL_}/storage/v1/object/public/menu-photos/${path}`;
+}
+export async function removePhoto(url: string | null | undefined) {
+  if (isDemo() || !url || !url.includes("/menu-photos/")) return;
+  session ??= read<Session>(SESSION);
+  await fetch(`${URL_}/storage/v1/object/menu-photos`, { method: "DELETE",
+    headers: { apikey: KEY, Authorization: "Bearer " + session?.access_token, "Content-Type": "application/json" },
+    body: JSON.stringify({ prefixes: [url.split("/menu-photos/")[1]] }) }).catch(() => {});
+}
 
 /** One id per order attempt: a retry after a dropped connection is saved once (0003). */
 export const newRequestId = (): string =>
