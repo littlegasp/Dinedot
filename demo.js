@@ -5,7 +5,7 @@
    When no staff tab is open, a pretend kitchen moves orders along by itself.
    ========================================================= */
 const Demo = (() => {
-  const KEY = "dd.demo.v2", HB = "dd.demo.hb", WHO = "dd.demo.user";
+  const KEY = "dd.demo.v3", HB = "dd.demo.hb", WHO = "dd.demo.user";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "d" + Math.random().toString(36).slice(2) + Date.now().toString(36));
   const now = () => new Date().toISOString();
   const ago = s => new Date(Date.now() - s * 1000).toISOString();
@@ -24,10 +24,11 @@ const Demo = (() => {
   function seed(){
     let r = 7; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
     const pick = a => a[Math.floor(rnd() * a.length)];
-    const cats = ["Starters", "Mains", "Breads & Rice", "Drinks", "Desserts"].map((n, i) => ({ id: "c" + (i + 1), name: n, sort: i + 1, active: true }));
+    const cats = ["Starters", "Mains", "Breads & Rice", "Drinks", "Desserts"].map((n, i) => ({ id: "c" + (i + 1), name: n, sort: i + 1, active: true,
+      station: ["Tandoor", "Curry", "Tandoor", "Bar", "Bar"][i] }));
     const I = (c, name, description, price, diet, spice, allergens, sizes, addons, best) =>
       ({ id: uid(), category_id: c, name, description, price, diet, spice, allergens, sizes: sizes || [], addons: addons || [], photo_url: "",
-         bestseller: !!best, available: true, sort: 0, created_at: now() });
+         bestseller: !!best, available: true, sort: 0, station: "", created_at: now() });
     const items = [
       I("c1", "Paneer Tikka", "Charred cottage cheese, peppers and onion, mint chutney", 290, "veg", 2, ["Dairy"], [], [{ name: "Extra chutney", price: 20 }], true),
       I("c1", "Chicken Seekh Kebab", "Minced chicken, ginger and green chilli, off the grill", 340, "nonveg", 3, [], [], []),
@@ -50,14 +51,16 @@ const Demo = (() => {
     ];
     items.forEach((x, i) => { x.sort = i + 1; x.photo_url = "img/menu/" + x.name.toLowerCase().replace(/[^a-z]+/g, "-") + ".jpg"; });
     items.find(x => x.name === "Tandoori Prawns").available = false;
+    ["Chicken Biryani", "Jeera Rice"].forEach(n => { items.find(x => x.name === n).station = "Curry"; });
     const tables = ["T1","T2","T3","T4","T5","T6","T7","T8"].map((c, i) => ({ id: "t" + (i + 1), code: c, name: "", area: i < 6 ? "Main" : "Terrace",
       seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c }));
     const settings = { restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
       accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
       gst_pct: 5, service_pct: 0, tip_options: [0, 5, 10], pay_cash: true, pay_card: true, pay_upi: true,
-      google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", cover_url: "img/cover.jpg", updated_at: now() };
-    const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], no: 100,
+      google_review_url: "https://www.google.com/maps", welcome_note: "Order from your phone — we'll bring it to your table.", cover_url: "img/cover.jpg",
+      stations: ["Tandoor", "Curry", "Bar"], max_discount_pct: 20, team_notice: "", team_notice_at: null, team_notice_by: "", updated_at: now() };
+    const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], payments: [], closes: [], no: 100, oi: 0, token: 0, token_day: "",
       staff: TEAM.map(t => Object.assign({ phone: "", active: true, created_at: ago(86400 * 60) }, t)) };
 
     // 21 days of history for the dashboard
@@ -70,7 +73,7 @@ const Demo = (() => {
         const open = new Date(base.getTime() + hour * 3600e3 + Math.floor(rnd() * 3400) * 1000);
         if (open > new Date(Date.now() - 3600e3)) continue;
         const t = pick(tables), guests = 1 + Math.floor(rnd() * 5);
-        const v = { id: uid(), table_id: t.id, opened_at: open.toISOString(), status: "paid", guests, split: 1, tip_pct: pick([0, 0, 5, 10]),
+        const v = { id: uid(), table_id: t.id, kind: "dine_in", token_no: null, opened_at: open.toISOString(), status: "paid", guests, split: 1, tip_pct: pick([0, 0, 5, 10]),
           pay_choice: "", bill_at: null, paid_at: new Date(open.getTime() + (35 + rnd() * 50) * 60e3).toISOString(), paid_method: pick(["upi", "upi", "upi", "cash", "card"]),
           paid_by: "u-waiter", void_reason: "" };
         const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: t.id, source: "guest", created_by: null, status: "served", note: "",
@@ -79,23 +82,26 @@ const Demo = (() => {
         const n = 2 + Math.floor(rnd() * 4);
         for (let j = 0; j < n; j++) { const it = pick(items.filter(x => x.name !== "Tandoori Prawns")); const size = it.sizes.length ? pick(it.sizes) : null;
           const qty = it.category_id === "c3" ? 1 + Math.floor(rnd() * 4) : 1; const unit = size ? size.price : it.price;
-          o.items.push({ item_id: it.id, name: it.name, size: size ? size.name : "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "" }); }
+          o.items.push({ id: ++db.oi, item_id: it.id, name: it.name, size: size ? size.name : "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "",
+            station: stationOf(it, cats), done_at: o.ready_at }); }
         db.visits.push(v); db.orders.push(o);
         Object.assign(v, freeze(db, v));
+        db.payments.push({ id: uid(), visit_id: v.id, method: v.paid_method, amount: v.total, reference: "", status: "captured", created_by: "u-waiter", created_at: v.paid_at });
         if (rnd() < .35) db.reviews.push({ id: uid(), visit_id: v.id, table_id: t.id, stars: pick([5, 5, 5, 4, 4, 3]), comment: pick(comments), created_at: v.paid_at });
       }
     }
     // A few tables busy right now
     const live = (code, mins, lines, status, extra) => {
       const t = tables.find(x => x.code === code);
-      const v = Object.assign({ id: uid(), table_id: t.id, opened_at: ago(mins * 60), status: "open", guests: 2, split: 1, tip_pct: 0, pay_choice: "",
+      const v = Object.assign({ id: uid(), table_id: t.id, kind: "dine_in", token_no: null, opened_at: ago(mins * 60), status: "open", guests: 2, split: 1, tip_pct: 0, pay_choice: "",
         bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }, extra || {});
       db.visits.push(v);
       const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: t.id, source: "guest", created_by: null, status, note: "",
         created_at: ago(mins * 60), started_at: status !== "new" ? ago(mins * 60 - 60) : null, ready_at: ["ready", "served"].includes(status) ? ago(60) : null,
         served_at: status === "served" ? ago(30) : null, cancel_reason: "", items: [] };
       lines.forEach(([name, qty, size]) => { const it = items.find(x => x.name === name); const unit = size ? it.sizes.find(s => s.name === size).price : it.price;
-        o.items.push({ item_id: it.id, name, size: size || "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "" }); });
+        o.items.push({ id: ++db.oi, item_id: it.id, name, size: size || "", addons: [], diet: it.diet, qty, unit_price: unit, line_total: unit * qty, note: "",
+          station: stationOf(it, cats), done_at: ["ready", "served"].includes(status) ? ago(60) : null }); });
       db.orders.push(o); return v;
     };
     live("T1", 6, [["Paneer Tikka", 1], ["Mint Lemonade", 2, "Glass"]], "new");
@@ -116,11 +122,21 @@ const Demo = (() => {
   function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); } }
 
   /* ---------- helpers (mirror the SQL) ---------- */
+  function stationOf(it, cats){ return it.station || (cats.find(c => c.id === it.category_id) || {}).station || ""; }
+  const today = () => dayKey(new Date());
+  const dayClosed = d => (db.closes || []).some(c => c.day === (d || today()));
+  const label = v => v.table_id ? (db.tables.find(t => t.id === v.table_id) || {}).code : "Token " + v.token_no;
+  const discOf = v => v.discount_kind ? { kind: v.discount_kind, value: v.discount_value, reason: v.discount_reason } : null;
+  const orderOpen = (o, cancel) => { const v = db.visits.find(x => x.id === o.visit_id) || {};
+    return ["open", "bill"].includes(v.status) || (v.status === "paid" && v.kind === "takeaway" && !cancel); };
+  const r2 = n => Math.round(n * 100) / 100;
+  const myName = () => (me() || {}).name || "";
   const tableBy = token => { const t = db.tables.find(x => x.token === token && x.active); if (!t) err("This QR code isn't active. Please ask a waiter."); return t; };
   const openVisit = tid => db.visits.find(v => v.table_id === tid && (v.status === "open" || v.status === "bill"));
   const orderJson = o => ({ id: o.id, no: o.no, status: o.status, source: o.source, note: o.note, created_at: o.created_at, started_at: o.started_at,
     ready_at: o.ready_at, served_at: o.served_at, cancel_reason: o.cancel_reason,
-    items: o.items.map(i => ({ name: i.name, size: i.size, addons: i.addons, qty: i.qty, diet: i.diet, note: i.note, amount: i.line_total })) });
+    items: o.items.map(i => ({ id: i.id, name: i.name, size: i.size, addons: i.addons, qty: i.qty, diet: i.diet, note: i.note, amount: i.line_total,
+      station: i.station || "", done: !!i.done_at })) });
   function linesOf(d, vid){
     const g = new Map();
     d.orders.filter(o => o.visit_id === vid && o.status !== "cancelled").sort((a, b) => a.created_at < b.created_at ? -1 : 1).forEach(o => o.items.forEach(i => {
@@ -128,14 +144,16 @@ const Demo = (() => {
       x.qty += i.qty; x.amount += i.line_total; g.set(k, x); }));
     return [...g.values()];
   }
-  function freeze(d, v){ const b = Money.bill(linesOf(d, v.id), d.settings, v.tip_pct, v.split);
-    return { subtotal: b.subtotal, service: b.service, gst: b.gst, tip: b.tip, total: b.grand }; }
+  function freeze(d, v){ const b = Money.bill(linesOf(d, v.id), d.settings, v.tip_pct, v.split, v.discount_kind ? { kind: v.discount_kind, value: v.discount_value } : null);
+    return { subtotal: b.subtotal, discount: b.discount, service: b.service, gst: b.gst, tip: b.tip, total: b.grand }; }
   function bill(vid){
     const v = db.visits.find(x => x.id === vid); if (!v) return null;
     const lines = linesOf(db, vid);
-    if (v.status === "paid") return { lines, subtotal: v.subtotal, service: v.service, gst: v.gst, tip: v.tip, total: v.total - v.tip, grand: v.total,
-      split: v.split, each: Math.ceil(v.total / v.split), tip_pct: v.tip_pct, service_pct: db.settings.service_pct, gst_pct: db.settings.gst_pct };
-    return Money.bill(lines, db.settings, v.tip_pct, v.split);
+    if (v.status === "paid") return { lines, subtotal: v.subtotal, discount: v.discount || 0, discount_kind: v.discount_kind || null, discount_value: v.discount_value || 0,
+      discount_reason: v.discount_reason || "", service: v.service, gst: v.gst, tip: v.tip, total: v.total - v.tip, grand: v.total,
+      split: v.split, each: Math.ceil(v.total / v.split), tip_pct: v.tip_pct, service_pct: db.settings.service_pct, gst_pct: db.settings.gst_pct,
+      payments: (db.payments || []).filter(p => p.visit_id === vid).map(p => ({ method: p.method, amount: p.amount, reference: p.reference })) };
+    return Money.bill(lines, db.settings, v.tip_pct, v.split, discOf(v));
   }
   function priceCart(items){
     if (!Array.isArray(items) || !items.length) err("Your order is empty.");
@@ -150,15 +168,17 @@ const Demo = (() => {
       if (m.sizes.length) { const s = m.sizes.find(x => x.name === it.size); if (!s) err("Pick a size for " + m.name + "."); unit = s.price; size = s.name; }
       const addons = [...new Set(it.addons || [])];
       addons.forEach(a => { const x = m.addons.find(y => y.name === a); if (!x) err("An extra for " + m.name + " is no longer offered. Please refresh."); unit += x.price; });
-      return { item_id: m.id, name: m.name, size, addons, diet: m.diet, qty, unit_price: unit, line_total: unit * qty, note: String(it.note || "").slice(0, 200) };
+      return { id: ++db.oi, item_id: m.id, name: m.name, size, addons, diet: m.diet, qty, unit_price: unit, line_total: unit * qty, note: String(it.note || "").slice(0, 200),
+        station: stationOf(m, db.categories), done_at: null };
     }).filter(() => { if (count > 60) err("That's a lot of dishes. Please ask a waiter."); return true; });
   }
   function addOrder(tid, items, note, guests, source, request){
     if (request) { const prev = db.orders.find(o => o.request_id === request);
       if (prev) { if (prev.table_id !== tid) err("That order belongs to another table."); return { order: orderJson(prev), visit_id: prev.visit_id, repeat: true }; } }
+    if (dayClosed()) err(source === "guest" ? db.settings.closed_message : "Today has been closed. Ask the owner to reopen it to take more orders.");
     const lines = priceCart(items);
     let v = openVisit(tid);
-    if (!v) { v = { id: uid(), table_id: tid, opened_at: now(), status: "open", guests: guests >= 1 ? guests : null, split: 1, tip_pct: 0, pay_choice: "",
+    if (!v) { v = { id: uid(), table_id: tid, kind: "dine_in", token_no: null, opened_at: now(), status: "open", guests: guests >= 1 ? guests : null, split: 1, tip_pct: 0, pay_choice: "",
       bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }; db.visits.push(v); }
     else {
       if (source === "guest" && db.orders.some(o => o.visit_id === v.id && o.source === "guest" && Date.now() - new Date(o.created_at) < 15e3))
@@ -192,12 +212,35 @@ const Demo = (() => {
     });
     db.calls.forEach(c => { if (!c.done_at && c.created_at >= born) { const a = t - new Date(c.created_at); if (!c.seen_at && a > 6e3) { c.seen_at = now(); c.seen_by = "u-waiter"; changed = true; }
       if (a > 40e3 && c.kind !== "bill") { c.done_at = now(); changed = true; } } });
-    db.visits.forEach(v => { if (v.status === "bill" && v.bill_at >= born && t - new Date(v.bill_at) > 45e3 && !db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) {
+    db.visits.forEach(v => { if (v.status === "bill" && v.kind !== "takeaway" && v.bill_at >= born && t - new Date(v.bill_at) > 45e3 && !db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) {
       db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = now(); });
       Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: v.pay_choice || "upi", paid_by: "u-waiter" });
+      db.payments.push({ id: uid(), visit_id: v.id, method: v.paid_method, amount: v.total, reference: "", status: "captured", created_by: "u-waiter", created_at: now() });
       db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); }); changed = true; } });
     if (changed) save();
   }
+
+  /* Payments: one or more parts, each its own payments row (same as pay_visit() in 0005) */
+  function payVisit(vid, parts){ need(isFloor());
+    if (!Array.isArray(parts)) err("Add how they paid."); if (parts.length < 1 || parts.length > 6) err("Use up to 6 payments on one bill.");
+    const v = db.visits.find(x => x.id === vid); if (!v || !["open", "bill"].includes(v.status)) err("This bill is already closed.");
+    if (dayClosed()) err("Today has been closed. Ask the owner to reopen it to take payments.");
+    if (v.kind !== "takeaway" && db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) err("Some dishes are still with the kitchen. Serve or cancel them first.");
+    const b = bill(v.id); let tot = 0; const methods = new Set(); let detail = "", refs = "";
+    const rows = parts.map(p => { const m = p.method;
+      if (!(["upi", "cash", "card"].includes(m) || (m === "mixed" && parts.length === 1))) err("Pick how they paid.");
+      const amt = r2(Number(p.amount)); if (p.amount === "" || p.amount == null || isNaN(amt) || amt < 0 || (amt === 0 && parts.length > 1)) err("Check the amounts.");
+      const ref = String(p.reference || "").trim(); if (ref.length > 60) err("The reference is too long.");
+      tot = r2(tot + amt); methods.add(m); detail += (detail ? " + " : "") + m.toUpperCase() + (parts.length > 1 ? " ₹" + amt : ""); if (ref) refs += " · ref " + ref;
+      return { id: uid(), visit_id: v.id, method: m, amount: amt, reference: ref, status: "captured", created_by: me().id, created_at: now() }; });
+    if (tot !== b.grand) err("The payments add up to ₹" + tot + " but the bill is ₹" + b.grand + ".");
+    Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: methods.size === 1 ? [...methods][0] : "mixed", paid_by: me().id });
+    (db.payments = db.payments || []).push(...rows);
+    if (v.kind !== "takeaway") {
+      db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = o.served_at || now(); });
+      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); }); }
+    log("bill_paid", label(v) + " · " + detail + " · ₹" + v.total + refs);
+    save(); return bill(v.id); }
 
   /* Allowed order steps — same list as order_step_ok() in 0003_hardening.sql */
   const STEPS = ["new>cooking", "new>cancelled", "cooking>ready", "cooking>new", "cooking>cancelled", "ready>served", "ready>cooking", "ready>cancelled", "served>ready"];
@@ -256,9 +299,14 @@ const Demo = (() => {
       const flow = {}; db.visits.filter(v => v.status !== "void" && dayKey(v.opened_at) === today).forEach(v => { const h = new Date(v.opened_at).getHours(); flow[h] = (flow[h] || 0) + 1; });
       const rt = db.reviews.filter(r => dayKey(r.created_at) === today);
       return { now: now(), role: role(),
-        settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name },
+        settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name,
+          stations: s.stations || [], max_discount_pct: s.max_discount_pct ?? 20,
+          notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed() },
         tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active })),
-        visits: db.visits.filter(v => v.status === "open" || v.status === "bill").map(v => ({ id: v.id, table_id: v.table_id, status: v.status, opened_at: v.opened_at,
+        visits: db.visits.filter(v => v.status === "open" || v.status === "bill" || (v.kind === "takeaway" && v.status === "paid"
+            && db.orders.some(o => o.visit_id === v.id && ["new", "cooking", "ready"].includes(o.status))))
+          .sort((a, b) => a.opened_at < b.opened_at ? -1 : 1)
+          .map(v => ({ id: v.id, table_id: v.table_id, kind: v.kind || "dine_in", token: v.token_no ?? null, status: v.status, opened_at: v.opened_at,
           bill_at: v.bill_at, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice, bill: bill(v.id),
           orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson) })),
         calls: db.calls.filter(c => !c.done_at).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
@@ -270,11 +318,13 @@ const Demo = (() => {
     staff_order_status({ p_order, p_status, p_reason }){ const r = role(); need(r);
       const o = db.orders.find(x => x.id === p_order); if (!o) err("That order is gone.");
       if (!["new", "cooking", "ready", "served", "cancelled"].includes(p_status)) err("Unknown status.");
-      if (["paid", "void"].includes((db.visits.find(v => v.id === o.visit_id) || {}).status)) err("This bill is already closed, so its orders can't change.");
+      if (!orderOpen(o, p_status === "cancelled")) err("This bill is already closed, so its orders can't change.");
       if (o.status === p_status) return orderJson(o);
       if (!STEPS.includes(o.status + ">" + p_status)) err("This order is " + o.status + " and can't go to " + p_status + " from there. Refresh the screen.");
       if (p_status === "cancelled") need(["owner", "manager"].includes(r) || (r === "waiter" && o.status === "new"));
-      o.status = p_status;
+      const was = o.status; o.status = p_status;
+      if (["ready", "served"].includes(p_status)) o.items.forEach(i => { i.done_at = i.done_at || now(); });
+      else if (p_status === "new" || (p_status === "cooking" && ["ready", "served"].includes(was))) o.items.forEach(i => { i.done_at = null; });
       o.started_at = p_status === "new" ? null : (o.started_at || (p_status !== "cancelled" ? now() : null));
       o.ready_at = ["new", "cooking"].includes(p_status) ? null : ["ready", "served"].includes(p_status) ? (o.ready_at || now()) : o.ready_at;
       o.served_at = p_status === "served" ? (o.served_at || now()) : p_status === "cancelled" ? o.served_at : null;
@@ -293,44 +343,102 @@ const Demo = (() => {
       if (was.split !== v.split || was.tip !== v.tip_pct) log("bill_changed", (db.tables.find(t => t.id === v.table_id) || {}).code + " · split " + was.split + "→" + v.split + " · tip " + was.tip + "%→" + v.tip_pct + "%");
       save(); return bill(v.id); },
     staff_mark_paid({ p_visit, p_method, p_reference }){ need(isFloor()); if (!["upi", "cash", "card", "mixed"].includes(p_method)) err("Pick how they paid.");
-      const ref = String(p_reference || "").trim(); if (ref.length > 60) err("The reference is too long.");
       const v = db.visits.find(x => x.id === p_visit); if (!v || !["open", "bill"].includes(v.status)) err("This bill is already closed.");
-      if (db.orders.some(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status))) err("Some dishes are still with the kitchen. Serve or cancel them first.");
-      Object.assign(v, freeze(db, v), { status: "paid", paid_at: now(), paid_method: p_method, paid_by: me().id });
-      (db.payments = db.payments || []).push({ id: uid(), visit_id: v.id, method: p_method, amount: v.total, reference: ref, status: "captured", created_by: me().id, created_at: now() });
-      log("bill_paid", (db.tables.find(t => t.id === v.table_id) || {}).code + " · " + p_method.toUpperCase() + " · ₹" + v.total + (ref ? " · ref " + ref : ""));
-      db.orders.filter(o => o.visit_id === v.id && o.status === "ready").forEach(o => { o.status = "served"; o.served_at = o.served_at || now(); });
-      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
-      save(); return bill(v.id); },
+      return payVisit(p_visit, [{ method: p_method, amount: bill(v.id).grand, reference: p_reference }]); },
+    staff_pay({ p_visit, p_parts }){ return payVisit(p_visit, p_parts); },
+    staff_set_discount({ p_visit, p_kind, p_value, p_reason }){ need(isManager());
+      const v = db.visits.find(x => x.id === p_visit && ["open", "bill"].includes(x.status)); if (!v) err("This bill is already closed.");
+      if (!p_kind || p_kind === "none" || !+p_value) { const had = !!v.discount_kind;
+        Object.assign(v, { discount_kind: null, discount_value: 0, discount_reason: "", discount_by: null }); if (had) log("discount_removed", label(v)); save(); return bill(v.id); }
+      if (!["pct", "amount"].includes(p_kind)) err("Pick percent or amount.");
+      if (+p_value < 0 || (p_kind === "pct" && +p_value > 100)) err("Check the discount.");
+      if (String(p_reason || "").trim().length < 3) err("Write a short reason for the discount.");
+      const sub = bill(v.id).subtotal, d = p_kind === "pct" ? r2(sub * p_value / 100) : Math.min(+p_value, sub), lim = db.settings.max_discount_pct ?? 20;
+      if (role() !== "owner" && ((p_kind === "pct" && +p_value > lim) || (p_kind === "amount" && d > r2(sub * lim / 100)))) err("Managers can take up to " + lim + "% off a bill. Ask the owner for more.");
+      Object.assign(v, { discount_kind: p_kind, discount_value: r2(+p_value), discount_reason: String(p_reason).trim().slice(0, 200), discount_by: me().id });
+      log("discount", label(v) + " · ₹" + d + (p_kind === "pct" ? " (" + p_value + "%)" : "") + " · " + String(p_reason).trim()); save(); return bill(v.id); },
+    staff_takeaway_order({ p_visit, p_items, p_note, p_request_id }){ need(isFloor());
+      if (p_request_id) { const prev = db.orders.find(o => o.request_id === p_request_id);
+        if (prev) { if (prev.table_id) err("That order belongs to another table."); return { order: orderJson(prev), visit_id: prev.visit_id, token: (db.visits.find(v => v.id === prev.visit_id) || {}).token_no, repeat: true }; } }
+      if (dayClosed()) err("Today has been closed. Ask the owner to reopen it to take more orders.");
+      const lines = priceCart(p_items); let v;
+      if (!p_visit) { if (db.token_day !== today()) { db.token_day = today(); db.token = 0; }
+        v = { id: uid(), table_id: null, kind: "takeaway", token_no: ++db.token, opened_at: now(), status: "open", guests: null, split: 1, tip_pct: 0, pay_choice: "",
+          bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }; db.visits.push(v); }
+      else { v = db.visits.find(x => x.id === p_visit && x.kind === "takeaway" && ["open", "bill"].includes(x.status)); if (!v) err("This takeaway is already closed."); v.status = "open"; }
+      const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: null, source: "staff", created_by: me().id, status: "new", note: String(p_note || "").slice(0, 300),
+        created_at: now(), started_at: null, ready_at: null, served_at: null, cancel_reason: "", items: lines, request_id: p_request_id || null };
+      db.orders.push(o); save(); return { order: orderJson(o), visit_id: v.id, token: v.token_no }; },
+    staff_item_done({ p_item, p_done }){ need(role());
+      const o = db.orders.find(x => x.items.some(i => i.id === p_item)); if (!o) err("That dish is gone.");
+      if (!orderOpen(o, false)) err("This bill is already closed, so its orders can't change.");
+      if (!["new", "cooking", "ready"].includes(o.status)) err("This order is " + o.status + " so its dishes can't change. Refresh the screen.");
+      const it = o.items.find(i => i.id === p_item); it.done_at = p_done ? (it.done_at || now()) : null;
+      if (p_done) { if (o.status === "new") { o.status = "cooking"; o.started_at = o.started_at || now(); }
+        if (o.items.every(i => i.done_at)) { o.status = "ready"; o.ready_at = o.ready_at || now(); } }
+      else if (o.status === "ready") { o.status = "cooking"; o.ready_at = null; }
+      save(); return orderJson(o); },
+    staff_set_notice({ p_text }){ need(isManager()); const t = String(p_text || "").trim(); if (t.length > 300) err("Keep the notice under 300 characters.");
+      Object.assign(db.settings, { team_notice: t, team_notice_at: t ? now() : null, team_notice_by: t ? myName() : "" });
+      log(t ? "notice_changed" : "notice_cleared", t.slice(0, 120)); save(); return null; },
+    staff_day_summary({ p_day } = {}){ need(isManager()); const d = p_day || today();
+      const paid = db.visits.filter(v => v.status === "paid" && dayKey(v.paid_at) === d), sum = (a, f) => r2(a.reduce((x, y) => x + f(y), 0));
+      const pays = (db.payments || []).filter(p => dayKey(p.created_at) === d && (db.visits.find(v => v.id === p.visit_id) || {}).status === "paid");
+      return { day: d, today: today(), closed: clone((db.closes || []).find(c => c.day === d) || null),
+        methods: { cash: sum(pays.filter(p => p.method === "cash"), p => p.amount), upi: sum(pays.filter(p => p.method === "upi"), p => p.amount),
+                   card: sum(pays.filter(p => ["card", "mixed"].includes(p.method)), p => p.amount) },
+        sales: sum(paid, v => v.total), bills: paid.length, discounts: sum(paid, v => v.discount || 0), tips: sum(paid, v => v.tip),
+        voids: db.visits.filter(v => v.status === "void" && dayKey(v.opened_at) === d).length,
+        open: db.visits.filter(v => ["open", "bill"].includes(v.status)).length,
+        recent: clone((db.closes || []).slice().sort((a, b) => a.day < b.day ? 1 : -1).slice(0, 7)) }; },
+    staff_close_day({ p_day, p_opening, p_paid_out, p_counted, p_note }){ need(isManager());
+      if (!p_day || p_day > today()) err("You can't close a day that hasn't started."); if (dayClosed(p_day)) err("This day is already closed.");
+      if (+p_opening < 0 || +p_paid_out < 0 || p_counted == null || p_counted === "" || +p_counted < 0) err("Check the cash amounts.");
+      if (String(p_note || "").length > 300) err("Keep the note under 300 characters.");
+      const sm = F.staff_day_summary({ p_day }); if (sm.open > 0) err("Take payment for or clear the " + sm.open + " open bill(s) first.");
+      const expected = r2((+p_opening || 0) + sm.methods.cash - (+p_paid_out || 0)), counted = r2(+p_counted);
+      const c = { id: uid(), day: p_day, opening_cash: +p_opening || 0, cash_sales: sm.methods.cash, upi_sales: sm.methods.upi, card_sales: sm.methods.card,
+        sales: sm.sales, bills: sm.bills, discounts: sm.discounts, tips: sm.tips, paid_out: +p_paid_out || 0, expected, counted, difference: r2(counted - expected),
+        note: String(p_note || "").trim(), closed_by: me().id, closed_by_name: myName(), closed_at: now() };
+      (db.closes = db.closes || []).push(c);
+      log("day_closed", p_day + " · expected ₹" + expected + " · counted ₹" + counted + " · " + (counted === expected ? "matches" : counted > expected ? "₹" + r2(counted - expected) + " extra" : "₹" + r2(expected - counted) + " short"));
+      save(); return clone(c); },
+    owner_reopen_day({ p_day, p_reason }){ need(role() === "owner"); if (String(p_reason || "").trim().length < 3) err("Write a short reason.");
+      const c = (db.closes || []).find(x => x.day === p_day); if (!c) err("That day isn't closed.");
+      db.closes = db.closes.filter(x => x !== c); log("day_reopened", p_day + " · was counted ₹" + c.counted + " by " + c.closed_by_name + " · " + String(p_reason).trim().slice(0, 120));
+      save(); return null; },
     staff_void_visit({ p_visit, p_reason }){ need(isManager()); if (String(p_reason || "").trim().length < 3) err("Write a short reason.");
       const v = db.visits.find(x => x.id === p_visit && ["open", "bill"].includes(x.status)); if (!v) err("This bill is already closed.");
       v.status = "void"; v.void_reason = p_reason;
       db.orders.filter(o => o.visit_id === v.id && ["new", "cooking"].includes(o.status)).forEach(o => { o.status = "cancelled"; o.cancel_reason = "Table cleared"; });
-      db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
-      log("table_cleared", (db.tables.find(t => t.id === v.table_id) || {}).code + " · " + p_reason); save(); return null; },
+      if (v.table_id) db.calls.forEach(c => { if (c.table_id === v.table_id && !c.done_at) c.done_at = now(); });
+      log("table_cleared", label(v) + " · " + p_reason); save(); return null; },
     staff_menu(){ need(role()); return { categories: clone(db.categories).sort((a, b) => a.sort - b.sort), items: clone(db.items).sort((a, b) => a.sort - b.sort) }; },
     staff_item_available({ p_item, p_available }){ need(role()); const i = db.items.find(x => x.id === p_item); if (i) { i.available = !!p_available; log(p_available ? "back_on_menu" : "sold_out", i.name); } save(); return null; },
     staff_bills({ p_from, p_to }){ need(isFloor());
       return db.visits.filter(v => ["paid", "void"].includes(v.status) && inRange(v.paid_at || v.opened_at, p_from, p_to))
         .sort((a, b) => (a.paid_at || a.opened_at) < (b.paid_at || b.opened_at) ? 1 : -1)
-        .map(v => ({ id: v.id, table: (db.tables.find(t => t.id === v.table_id) || {}).code, opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
-          method: v.paid_method, total: v.total, tip: v.tip, guests: v.guests, void_reason: v.void_reason, by: (db.staff.find(s => s.id === v.paid_by) || {}).name || null,
+        .map(v => ({ id: v.id, table: label(v), kind: v.kind || "dine_in", opened_at: v.opened_at, paid_at: v.paid_at, status: v.status,
+          method: v.paid_method, total: v.total, tip: v.tip, discount: v.discount || 0, guests: v.guests, void_reason: v.void_reason, by: (db.staff.find(s => s.id === v.paid_by) || {}).name || null,
           bill: bill(v.id), ref: (db.payments || []).filter(x => x.visit_id === v.id && x.reference).map(x => x.reference).join(", ") || null,
           stars: (db.reviews.find(r => r.visit_id === v.id) || {}).stars || null })); },
 
     owner_save_category({ p }){ need(isManager()); if (!String(p.name || "").trim() && !p.id) err("Give the section a name.");
+      if (p.station && !(db.settings.stations || []).includes(p.station)) err("Pick a kitchen station from Settings.");
       let c = p.id && db.categories.find(x => x.id === p.id);
-      if (!c) { c = { id: uid(), name: p.name.trim(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.categories.map(x => x.sort)) + 1, active: p.active !== false }; db.categories.push(c); }
-      else { if (p.name != null) c.name = String(p.name).trim(); if (p.sort != null) c.sort = +p.sort; if (p.active != null) c.active = !!p.active; }
+      if (!c) { c = { id: uid(), name: p.name.trim(), sort: p.sort != null ? +p.sort : Math.max(0, ...db.categories.map(x => x.sort)) + 1, active: p.active !== false, station: p.station || "" }; db.categories.push(c); }
+      else { if (p.name != null) c.name = String(p.name).trim(); if (p.sort != null) c.sort = +p.sort; if (p.active != null) c.active = !!p.active; if (p.station != null) c.station = p.station; }
       save(); return c.id; },
     owner_delete_category({ p_id }){ need(isManager()); if (db.items.some(i => i.category_id === p_id)) err("Move or delete the dishes in this section first.");
       db.categories = db.categories.filter(c => c.id !== p_id); save(); return null; },
     owner_save_item({ p }){ need(isManager());
       if ([...(p.sizes || []), ...(p.addons || [])].some(x => !String(x.name || "").trim() || x.price == null || +x.price < 0)) err("Every size and extra needs a name and a price.");
       if (!String(p.name || "").trim()) err("Give the dish a name.");
+      if (p.station && !(db.settings.stations || []).includes(p.station)) err("Pick a kitchen station from Settings.");
       const row = { category_id: p.category_id, name: String(p.name).trim(), description: p.description || "", price: +p.price || 0, diet: p.diet || "veg",
         spice: p.spice === "" || p.spice == null ? null : +p.spice, allergens: p.allergens || [], sizes: (p.sizes || []).map(x => ({ name: x.name.trim(), price: +x.price })),
-        addons: (p.addons || []).map(x => ({ name: x.name.trim(), price: +x.price })), photo_url: p.photo_url || "", bestseller: !!p.bestseller, available: p.available !== false };
+        addons: (p.addons || []).map(x => ({ name: x.name.trim(), price: +x.price })), photo_url: p.photo_url || "", bestseller: !!p.bestseller, available: p.available !== false,
+        station: p.station != null ? p.station : ((p.id && (db.items.find(x => x.id === p.id) || {}).station) || "") };
       let i = p.id && db.items.find(x => x.id === p.id);
       if (i) { const sz = JSON.stringify([i.sizes, i.addons]) !== JSON.stringify([row.sizes, row.addons]);
         if (i.price !== row.price || sz) log("price_changed", row.name + " · ₹" + i.price + " → ₹" + row.price + (sz ? " · sizes/extras changed" : ""));
@@ -360,7 +468,12 @@ const Demo = (() => {
       if (p.gst_pct != null && (+p.gst_pct < 0 || +p.gst_pct > 28)) err("GST must be between 0 and 28%.");
       if (p.tip_options && p.tip_options.some(x => !(x >= 0 && x <= 30))) err("Tip choices must be between 0 and 30%.");
       if (p.service_pct != null && (+p.service_pct < 0 || +p.service_pct > 20)) err("Service charge must be between 0 and 20%.");
-      Object.keys(p).forEach(k => { if (k in db.settings && p[k] != null && !(k === "restaurant_name" && !String(p[k]).trim())) db.settings[k] = ["gst_pct", "service_pct"].includes(k) ? +p[k] : p[k]; });
+      if (p.max_discount_pct != null && (+p.max_discount_pct < 0 || +p.max_discount_pct > 100)) err("The discount limit must be between 0 and 100%.");
+      if (p.stations) { const seen = new Set(); p = Object.assign({}, p, { stations: p.stations.map(x => String(x).trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())) });
+        if (p.stations.length > 8) err("Use up to 8 kitchen stations."); if (p.stations.some(x => x.length > 24)) err("Keep station names under 24 characters.");
+        db.categories.forEach(c => { if (c.station && !p.stations.includes(c.station)) c.station = ""; });
+        db.items.forEach(i => { if (i.station && !p.stations.includes(i.station)) i.station = ""; }); }
+      Object.keys(p).forEach(k => { if (k in db.settings && p[k] != null && !(k === "restaurant_name" && !String(p[k]).trim())) db.settings[k] = ["gst_pct", "service_pct", "max_discount_pct"].includes(k) ? +p[k] : p[k]; });
       if ("cover_url" in p && !("cover_url" in db.settings)) db.settings.cover_url = p.cover_url;
       if ("accepting_orders" in p) log(p.accepting_orders ? "orders_on" : "orders_off", ""); else log("settings_changed", "");
       db.settings.updated_at = now(); save(); return null; },
@@ -368,13 +481,15 @@ const Demo = (() => {
       const paid = db.visits.filter(v => v.status === "paid" && inRange(v.paid_at, p_from, p_to));
       const byDay = {}, byHour = {}, methods = {}, top = {};
       paid.forEach(v => { const d = dayKey(v.paid_at); byDay[d] = byDay[d] || { day: d, sales: 0, bills: 0 }; byDay[d].sales += v.total; byDay[d].bills++;
-        const h = new Date(v.opened_at).getHours(); byHour[h] = (byHour[h] || 0) + 1; methods[v.paid_method] = (methods[v.paid_method] || 0) + v.total;
+        const h = new Date(v.opened_at).getHours(); byHour[h] = (byHour[h] || 0) + 1;
+        const ps = (db.payments || []).filter(x => x.visit_id === v.id);
+        (ps.length ? ps : [{ method: v.paid_method, amount: v.total }]).forEach(x => { methods[x.method] = (methods[x.method] || 0) + x.amount; });
         db.orders.filter(o => o.visit_id === v.id && o.status !== "cancelled").forEach(o => o.items.forEach(i => {
           top[i.name] = top[i.name] || { name: i.name, qty: 0, amount: 0 }; top[i.name].qty += i.qty; top[i.name].amount += i.line_total; })); });
       const ords = db.orders.filter(o => o.ready_at && inRange(o.created_at, p_from, p_to));
       const revs = db.reviews.filter(r => inRange(r.created_at, p_from, p_to)).sort((a, b) => a.created_at < b.created_at ? 1 : -1);
       const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
-      return { sales: sum(paid, v => v.total), tips: sum(paid, v => v.tip), gst: sum(paid, v => v.gst), bills: paid.length, guests: sum(paid, v => v.guests || 0),
+      return { sales: sum(paid, v => v.total), tips: sum(paid, v => v.tip), gst: sum(paid, v => v.gst), discounts: sum(paid, v => v.discount || 0), bills: paid.length, guests: sum(paid, v => v.guests || 0),
         voids: db.visits.filter(v => v.status === "void" && inRange(v.opened_at, p_from, p_to)).length,
         by_day: Object.values(byDay).sort((a, b) => a.day < b.day ? -1 : 1), by_hour: byHour, methods,
         top: Object.values(top).sort((a, b) => b.qty - a.qty || b.amount - a.amount).slice(0, 10),

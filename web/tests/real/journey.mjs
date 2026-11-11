@@ -111,6 +111,61 @@ try {
   await s.keyboard.press("Escape");
   ok("bills: T2's UPI bill with its reference");
 
+  // 0005 on the real database: stations, takeaway token, discount, split payment, dish ticks, close the day
+  await s.goto(BASE + "#/settings"); await s.getByLabel("Stations").fill("Tandoor, Curry, tandoor");
+  await s.getByRole("button", { name: "Save changes" }).click(); await s.getByText("Settings saved").waitFor();
+  if (sql("select array_to_string(stations, ',') from settings") !== "Tandoor,Curry") throw new Error("stations not saved: " + sql("select stations from settings"));
+  sql("update categories set station = 'Tandoor' where id = (select category_id from items where name = 'Paneer Tikka')");
+  ok("settings: kitchen stations saved (duplicates dropped)");
+  await s.goto(BASE + "#/pos"); await s.getByRole("radio", { name: "Takeaway", exact: true }).click();
+  await s.getByRole("button", { name: /Paneer Tikka/ }).first().click();
+  const pk = s.getByRole("dialog"); if (await pk.isVisible().catch(() => false)) await pk.getByRole("button", { name: /^Add ·/ }).click();
+  await s.locator("#ticket").getByRole("button", { name: "Send" }).click();
+  await s.getByText(/Sent to the kitchen · Token 1/).waitFor();
+  if (sql("select kind || '|' || token_no || '|' || (table_id is null)::text from visits where kind = 'takeaway'") !== "takeaway|1|true") throw new Error("takeaway visit wrong");
+  if (sql("select station from order_items oi join orders o on o.id = oi.order_id join visits v on v.id = o.visit_id where v.kind = 'takeaway'") !== "Tandoor") throw new Error("station not copied");
+  ok("POS: takeaway token 1 saved without a table; the dish carries its station");
+  await s.locator("#ticket").getByRole("button", { name: "Discount" }).click();
+  const dd = s.getByRole("dialog", { name: "Discount" });
+  await dd.getByRole("button", { name: "10%" }).click(); await dd.getByLabel("Reason").fill("Regular guest");
+  await dd.getByRole("button", { name: "Give discount" }).click(); await s.getByText("Discount added").waitFor();
+  await s.locator("#ticket").getByRole("button", { name: "Take payment" }).click();
+  const sp = s.getByRole("dialog", { name: /Take payment/ });
+  await sp.getByRole("button", { name: "Split" }).click(); await sp.getByText("Adds up").waitFor();
+  await sp.getByLabel("Payment 1 reference").fill("UTR555");
+  await sp.getByRole("button", { name: /Mark paid/ }).click(); await s.getByText("Paid · Token 1").waitFor();
+  const parts = sql("select string_agg(p.method || ':' || p.reference, ',' order by p.method desc) from payments p join visits v on v.id = p.visit_id where v.kind = 'takeaway'");
+  if (parts !== "upi:UTR555,cash:") throw new Error("split payment rows wrong: " + parts);
+  if (sql("select (discount > 0 and paid_method = 'mixed' and total = (select sum(amount) from payments where visit_id = visits.id))::text from visits where kind = 'takeaway'") !== "true")
+    throw new Error("discount or totals wrong on the paid takeaway");
+  if (sql("select count(*) from activity_log where action = 'discount' and detail like 'Token 1 · %Regular guest'") !== "1") throw new Error("discount not logged");
+  ok("discount (logged) and a split payment saved as two payments rows that add up");
+  await s.goto(BASE + "#/kitchen"); await s.getByRole("radio", { name: "Tandoor" }).click();
+  const tk = s.locator("article", { hasText: "Token 1" }).first();
+  await tk.getByRole("button", { name: /Paneer Tikka/ }).click();
+  await s.locator("section[aria-label=ready] article", { hasText: "Token 1" }).waitFor();
+  if (sql("select o.status || '|' || (oi.done_at is not null)::text from order_items oi join orders o on o.id = oi.order_id join visits v on v.id = o.visit_id where v.kind = 'takeaway'") !== "ready|true")
+    throw new Error("dish tick not saved");
+  await s.getByRole("radio", { name: "All stations" }).click();
+  await s.goto(BASE + "#/pos?table=takeaway"); await s.getByRole("radio", { name: /Token 1, paid, ready/ }).click();
+  await s.locator("#ticket").getByRole("button", { name: "Handed over" }).click(); await s.getByText("Token 1 handed over").waitFor();
+  ok("kitchen: Tandoor station ticks the dish, the paid takeaway goes Ready, then handed over");
+  await s.goto(BASE + "#/today"); await s.getByRole("button", { name: "Close the day" }).click();
+  const cd = s.getByRole("dialog", { name: /^Close / });
+  await cd.getByLabel("Opening cash (₹)").fill("500");
+  const exp = Number((await cd.locator("div", { hasText: /^Expected in the drawer/ }).locator("dd").first().textContent()).replace(/[^\d.]/g, ""));
+  await cd.getByLabel("Cash counted").fill(String(exp)); await cd.getByText("matches").waitFor();
+  await cd.getByRole("button", { name: "Close the day" }).click(); await s.getByText("Day closed").waitFor();
+  if (sql("select (difference = 0 and opening_cash = 500 and upi_sales > 0)::text from day_closes") !== "true") throw new Error("day close row wrong");
+  await s.goto(BASE + "#/pos?table=takeaway"); await s.getByRole("button", { name: /Paneer Tikka/ }).first().click();
+  if (await pk.isVisible().catch(() => false)) await pk.getByRole("button", { name: /^Add ·/ }).click();
+  await s.locator("#ticket").getByRole("button", { name: "Send" }).click(); await s.getByText(/Today has been closed/).first().waitFor();
+  await s.goto(BASE + "#/today"); await s.getByRole("button", { name: "See the count" }).click();
+  await s.getByRole("dialog").getByPlaceholder(/Why/).fill("Testing reopen"); await s.getByRole("dialog").getByRole("button", { name: "Reopen day" }).click();
+  await s.getByText("Day reopened").waitFor();
+  if (sql("select count(*) from day_closes") !== "0" || sql("select count(*) from activity_log where action = 'day_reopened'") !== "1") throw new Error("reopen not saved/logged");
+  ok("close the day: count matches and is saved; a closed day refuses orders; owner reopens (logged)");
+
   // Password reset link → set a new password
   const { createHmac } = await import("node:crypto");
   const b64 = o => Buffer.from(JSON.stringify(o)).toString("base64url");

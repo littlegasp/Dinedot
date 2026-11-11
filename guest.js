@@ -235,7 +235,7 @@ function billHtml(v){
   const p = M.place, b0 = v.bill;
   if (!billForm || billForm.visit !== v.id) billForm = { visit: v.id, split: v.split || 1, tip: v.tip_pct || 0, pay: v.pay_choice || (p.pay.upi ? "upi" : p.pay.cash ? "cash" : "card"), edit: false };
   const f = billForm, asked = v.status === "bill" && !f.edit;
-  const b = asked ? b0 : Money.bill(b0.lines, p, f.tip, f.split);
+  const b = asked ? b0 : Money.bill(b0.lines, p, f.tip, f.split, b0.discount_kind ? { kind: b0.discount_kind, value: b0.discount_value } : null);
   const pending = v.orders.some(o => o.status === "new" || o.status === "cooking");
   let h = `<div style="margin-top:8px">${b.lines.map(l => `<div class="line" style="grid-template-columns:1fr auto"><div class="nm">${l.qty} × ${esc(l.name)}<small>${[l.size, ...(l.addons || [])].filter(Boolean).map(esc).join(" · ")}</small></div><div class="amt">${money(l.amount)}</div></div>`).join("")}</div>
     <div class="totals"><div><span>Item total</span><span>${money(b.subtotal)}</span></div>

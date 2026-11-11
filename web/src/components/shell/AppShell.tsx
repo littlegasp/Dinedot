@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Command } from "cmdk";
-import { Bell, BellRing, Building2, Droplets, LayoutGrid, LifeBuoy, LogOut, Menu as MenuIcon, Moon, Receipt, RefreshCw, Search, Smartphone, Sun, WifiOff } from "lucide-react";
+import { Bell, BellRing, Building2, Droplets, LayoutGrid, LifeBuoy, Lock, LogOut, Megaphone, Menu as MenuIcon, Moon, Receipt, RefreshCw, Search, Smartphone, Sun, WifiOff, X } from "lucide-react";
 import { NAV, type Route } from "@/lib/routes";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,23 @@ export function useTheme() {
     try { localStorage.setItem("dineos.theme", t); } catch {}
   };
   return { theme, toggle };
+}
+
+/** The team notice, until this person hides it on this device (a new notice shows again). */
+function NoticeBar() {
+  const { live } = useStaff();
+  const n = live?.settings.notice;
+  const [hidden, setHidden] = React.useState<string | null>(null);
+  React.useEffect(() => { try { setHidden(localStorage.getItem("dineos.notice.hidden")); } catch { /* private window */ } }, []);
+  if (!n || hidden === n.at) return null;
+  return (
+    <div role="status" className="flex items-start gap-3 bg-blue-soft px-4 py-2.5 text-[13px] text-fg lg:px-8">
+      <Megaphone className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
+      <p className="flex-1"><b>Team notice{n.by ? ` from ${n.by}` : ""}:</b> {n.text}</p>
+      <button aria-label="Hide the notice" className="grid size-6 place-items-center rounded text-fg-2 hover:text-fg"
+        onClick={() => { setHidden(n.at); try { localStorage.setItem("dineos.notice.hidden", n.at); } catch { /* private window */ } }}><X className="size-4" /></button>
+    </div>
+  );
 }
 
 /** Shows a bar when a newer version of the app has been published (checks every 5 min). */
@@ -130,6 +147,12 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
           <WifiOff className="size-4" aria-hidden />No internet. The screen will catch up as soon as the connection is back.
         </div>
       )}
+      {live?.settings.day_closed && (
+        <div role="status" className="flex items-center gap-2 bg-muted px-4 py-2 text-[13px] font-semibold text-fg lg:px-8">
+          <Lock className="size-4" aria-hidden />Today has been closed. No more orders or payments until the owner reopens it on Today.
+        </div>
+      )}
+      <NoticeBar />
 
       <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-sm lg:px-8">
         <div className="lg:hidden"><Logo compact /></div>
@@ -225,7 +248,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
             {role !== "kitchen" && (
               <Command.Group heading="Tables">
                 {(live?.tables ?? []).filter(t => t.active).map(t => {
-                  const v = live?.visits.find(x => x.table_id === t.id);
+                  const v = live?.visits.find(x => x.table_id === t.id && x.status !== "paid");
                   return <CmdItem key={t.id} onSelect={() => { location.hash = `/pos?table=${t.id}`; setCmd(false); }}>
                     <LayoutGrid className="size-4" />Table {t.code}<span className="ml-auto text-[12px] text-fg-2">{v ? (v.status === "bill" ? "Bill asked" : "In use") : "Free"}</span></CmdItem>;
                 })}

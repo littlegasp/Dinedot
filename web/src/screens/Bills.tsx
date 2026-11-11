@@ -6,10 +6,10 @@ import { Badge, Card, EmptyState, Input, Segmented, Skeleton } from "@/component
 import { Sheet, toast } from "@/components/ui/overlay";
 import { rpc } from "@/lib/api";
 import type { BillRow } from "@/lib/types";
-import { inr } from "@/lib/utils";
+import { cn, inr } from "@/lib/utils";
 
 const ist = (d: Date) => new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);   // the database counts days in India time
-const METHOD: Record<string, string> = { upi: "UPI", card: "Card", cash: "Cash", mixed: "Mixed" };
+const METHOD: Record<string, string> = { upi: "UPI", card: "Card", cash: "Cash", mixed: "Split" };
 type Range = "today" | "yesterday" | "week" | "custom";
 
 export function BillsScreen() {
@@ -34,9 +34,10 @@ export function BillsScreen() {
   const total = paid.reduce((s, r) => s + Number(r.total), 0);
   const download = () => {
     const esc = (x: unknown) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-    const csv = [["Table", "Opened", "Paid at", "Status", "Method", "Total", "Tip", "Guests", "Reference", "Closed by", "Reason", "Rating"].join(","),
+    const csv = [["Table", "Opened", "Paid at", "Status", "Method", "Payments", "Discount", "Total", "Tip", "Guests", "Reference", "Closed by", "Reason", "Rating"].join(","),
       ...(rows ?? []).map(r => [r.table, new Date(r.opened_at).toLocaleString("en-IN"), r.paid_at ? new Date(r.paid_at).toLocaleString("en-IN") : "", r.status,
-        r.method ? METHOD[r.method] : "", r.total, r.tip, r.guests, r.ref, r.by, r.void_reason, r.stars].map(esc).join(","))].join("\n");
+        r.method ? METHOD[r.method] : "", (r.bill.payments ?? []).map(p => `${METHOD[p.method]} ${p.amount}`).join(" + "), r.discount ?? 0,
+        r.total, r.tip, r.guests, r.ref, r.by, r.void_reason, r.stars].map(esc).join(","))].join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `bills-${from}${from !== to ? `-to-${to}` : ""}.csv`; a.click();
   };
 
@@ -59,7 +60,7 @@ export function BillsScreen() {
         <Card className="divide-y divide-border">
           {rows.map(r => (
             <button key={r.id} onClick={() => setOpen(r)} className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted/50">
-              <span className="font-display w-12 text-lg font-extrabold text-fg">{r.table}</span>
+              <span className={cn("font-display shrink-0 font-extrabold text-fg", r.kind === "takeaway" ? "w-12 text-[13px] leading-tight" : "w-12 text-lg")}>{r.table}</span>
               <span className="min-w-0 flex-1 text-[13px] text-fg-2">
                 {new Date(r.paid_at ?? r.opened_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
                 {r.by ? ` · ${r.by}` : ""}{r.ref ? ` · ref ${r.ref}` : ""}
@@ -71,7 +72,7 @@ export function BillsScreen() {
           ))}
         </Card>
       )}
-      <Sheet open={!!open} onOpenChange={o => !o && setOpen(null)} title={open ? `Table ${open.table}` : ""}
+      <Sheet open={!!open} onOpenChange={o => !o && setOpen(null)} title={open ? (open.kind === "takeaway" ? `Takeaway · ${open.table}` : `Table ${open.table}`) : ""}
         description={open ? new Date(open.paid_at ?? open.opened_at).toLocaleString("en-IN") : undefined}>
         {open && (
           <div className="grid gap-4 text-sm">
@@ -79,14 +80,17 @@ export function BillsScreen() {
             <ul className="grid gap-1">{open.bill.lines.map((l, i) => <li key={i} className="flex justify-between text-fg"><span><span className="num">{l.qty}×</span> {l.name}{l.size && ` · ${l.size}`}</span><span className="num">{inr(l.amount)}</span></li>)}</ul>
             <dl className="grid gap-1 border-t border-border pt-3 text-[13px]">
               <Row k="Items" v={inr(open.bill.subtotal, { paise: true })} />
+              {(open.bill.discount ?? 0) > 0 && <Row k={`Discount${open.bill.discount_kind === "pct" ? ` ${open.bill.discount_value}%` : ""}${open.bill.discount_reason ? ` · ${open.bill.discount_reason}` : ""}`}
+                v={`− ${inr(open.bill.discount!, { paise: true })}`} />}
               {open.bill.service > 0 && <Row k={`Service ${open.bill.service_pct}%`} v={inr(open.bill.service, { paise: true })} />}
               <Row k={`GST ${open.bill.gst_pct}%`} v={inr(open.bill.gst, { paise: true })} />
               {open.bill.tip > 0 && <Row k={`Tip ${open.bill.tip_pct}%`} v={inr(open.bill.tip)} />}
               <div className="flex justify-between pt-1 text-base font-extrabold"><dt className="text-fg">Total</dt><dd className="num text-fg">{inr(open.bill.grand)}</dd></div>
             </dl>
             <dl className="grid gap-1 rounded-[var(--radius)] bg-muted p-3 text-[13px]">
-              {open.method && <Row k="Paid by" v={METHOD[open.method]} />}
-              {open.ref && <Row k="Reference" v={open.ref} />}
+              {(open.bill.payments?.length ?? 0) > 1
+                ? open.bill.payments!.map((p, i) => <Row key={i} k={`Paid by ${METHOD[p.method]}${p.reference ? ` · ref ${p.reference}` : ""}`} v={inr(p.amount, { paise: true })} />)
+                : <>{open.method && <Row k="Paid by" v={METHOD[open.method]} />}{open.ref && <Row k="Reference" v={open.ref} />}</>}
               {open.by && <Row k="Closed by" v={open.by} />}
               {open.guests ? <Row k="Guests" v={String(open.guests)} /> : null}
               {open.stars ? <Row k="Guest rating" v={`${open.stars} of 5`} /> : null}

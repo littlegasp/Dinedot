@@ -5,7 +5,8 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Download, Pause, Play, Rec
 import { Button } from "@/components/ui/button";
 import { Badge, Card, CardHeader, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/overlay";
-import { TABLE_STATE, tableState, visitOf } from "@/components/ui/status";
+import { TABLE_STATE, tableState, visitLabel, visitOf } from "@/components/ui/status";
+import { CloseDayCard, NoticeCard } from "./DayClose";
 import { CALL_ICON, CALL_LABEL } from "@/components/shell/AppShell";
 import { rpc } from "@/lib/api";
 import { minutesSince, useAction, useStaff } from "@/lib/staff";
@@ -14,7 +15,7 @@ import { cn, inr } from "@/lib/utils";
 
 const ist = (d: Date) => new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);   // the database counts days in India time
 const METHOD: Record<PayMethod, { label: string; cls: string }> = {
-  upi: { label: "UPI", cls: "bg-blue" }, card: { label: "Card", cls: "bg-coral" }, cash: { label: "Cash", cls: "bg-success" }, mixed: { label: "Mixed", cls: "bg-warning" },
+  upi: { label: "UPI", cls: "bg-blue" }, card: { label: "Card", cls: "bg-coral" }, cash: { label: "Cash", cls: "bg-success" }, mixed: { label: "Split", cls: "bg-warning" },
 };
 
 export function TodayScreen({ go }: { go: (hash: string) => void }) {
@@ -48,7 +49,7 @@ export function TodayScreen({ go }: { go: (hash: string) => void }) {
   });
 
   const code = (id: string) => live.tables.find(x => x.id === id)?.code ?? "";
-  const lateOrders = live.visits.flatMap(v => v.orders.filter(o => (o.status === "new" || o.status === "cooking") && minutesSince(o.created_at) >= 15).map(o => ({ o, table: code(v.table_id) })));
+  const lateOrders = live.visits.flatMap(v => v.orders.filter(o => (o.status === "new" || o.status === "cooking") && minutesSince(o.created_at) >= 15).map(o => ({ o, table: visitLabel(v, live.tables) })));
   const attention = [
     ...live.calls.map(c => ({ key: c.id, Icon: CALL_ICON[c.kind], tone: "coral" as const, title: `${code(c.table_id)} ${CALL_LABEL[c.kind]}`, body: `waiting ${minutesSince(c.at)} min`,
       act: () => run(() => rpc("staff_call", { p_call: c.id, p_action: "done" }), "Done"), label: "Done" })),
@@ -173,6 +174,13 @@ export function TodayScreen({ go }: { go: (hash: string) => void }) {
           </div>
         </Card>
       </div>
+
+      {can("manage") && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CloseDayCard />
+          <NoticeCard />
+        </div>
+      )}
     </div>
   );
 }

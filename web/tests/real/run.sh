@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the built DineOS app against the REAL database migrations (0001–0004) through
+# Runs the built DineOS app against the REAL database migrations (0001–0005) through
 # PostgREST, the server Supabase uses. Needs: a local Postgres (PGHOST/PGUSER/PGPASSWORD),
 # a postgrest binary (POSTGREST=path, v12), Playwright. Prints "REAL STACK PASSED".
 set -euo pipefail
@@ -8,7 +8,7 @@ DB=dd_real; SECRET="test-only-secret-for-local-runs-0123456789"; PORT=8793; PGRS
 SQL=../supabase
 psql -q -v ON_ERROR_STOP=1 -c "drop database if exists $DB" -c "create database $DB" >/dev/null
 psql -q -At -v ON_ERROR_STOP=1 -d $DB -f $SQL/test/stub.sql -f $SQL/migrations/0001_init.sql -f $SQL/migrations/0002_cover_photo.sql \
-  -f $SQL/migrations/0003_hardening.sql -f $SQL/migrations/0004_restaurants.sql -f $SQL/sample_menu.sql >/dev/null 2>&1
+  -f $SQL/migrations/0003_hardening.sql -f $SQL/migrations/0004_restaurants.sql -f $SQL/migrations/0005_pos_kitchen_close.sql -f $SQL/sample_menu.sql >/dev/null 2>&1
 psql -q -v ON_ERROR_STOP=1 -d $DB >/dev/null <<SQL
 -- like Supabase: auth.uid() reads the JWT claims that PostgREST 12 sets
 create or replace function auth.uid() returns uuid language sql stable as

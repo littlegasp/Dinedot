@@ -12,10 +12,11 @@ import { cn, inr } from "@/lib/utils";
 type Opt = { name: string; price: number };
 type ItemDraft = Omit<MenuItem, "id" | "sort"> & { id?: string; sort?: number };
 const blankItem = (category_id: string): ItemDraft => ({ category_id, name: "", description: "", price: 0, diet: "veg", spice: null, allergens: [],
-  sizes: [], addons: [], photo_url: "", bestseller: false, available: true });
+  sizes: [], addons: [], photo_url: "", bestseller: false, available: true, station: "" });
 
 export function MenuScreen() {
-  const { me, can } = useStaff();
+  const { me, can, live } = useStaff();
+  const stations = live?.settings.stations ?? [];
   const manage = can("manage");
   const [menu, setMenu] = React.useState<StaffMenu | null>(null);
   const [q, setQ] = React.useState("");
@@ -56,6 +57,7 @@ export function MenuScreen() {
           <Card key={c.id} className={cn(!c.active && "opacity-70")}>
             <div className="flex items-center gap-3 border-b border-border px-5 py-3">
               <h2 className="flex-1 text-base font-extrabold text-fg">{c.name} <span className="num ml-1 text-[13px] font-semibold text-fg-2">{dishes.length}</span></h2>
+              {c.station && stations.length > 0 && <Badge tone="neutral">{c.station}</Badge>}
               {!c.active && <Badge tone="neutral"><EyeOff />Hidden from guests</Badge>}
               {manage && <Button size="sm" variant="ghost" onClick={() => setCat(c)}>Edit section</Button>}
             </div>
@@ -86,19 +88,33 @@ export function MenuScreen() {
         );
       })}
 
-      {cat && <SectionSheet c={cat} onClose={() => setCat(null)} onSaved={() => { setCat(null); load(); }} />}
-      {item && <DishSheet d={item} categories={menu.categories} restaurantId={me?.restaurant_id ?? "demo"} onClose={() => setItem(null)} onSaved={() => { setItem(null); load(); }} />}
+      {cat && <SectionSheet c={cat} stations={stations} onClose={() => setCat(null)} onSaved={() => { setCat(null); load(); }} />}
+      {item && <DishSheet d={item} categories={menu.categories} stations={stations} restaurantId={me?.restaurant_id ?? "demo"} onClose={() => setItem(null)} onSaved={() => { setItem(null); load(); }} />}
     </div>
   );
 }
 
-function SectionSheet({ c, onClose, onSaved }: { c: Partial<MenuCategory>; onClose: () => void; onSaved: () => void }) {
+/** Kitchen station picker; hidden until Settings has stations. */
+function StationField({ value, onChange, stations, hint, empty }: { value: string; onChange: (v: string) => void; stations: string[]; hint: string; empty: string }) {
+  if (!stations.length && !value) return null;
+  return (
+    <Field label="Kitchen station" hint={hint}>
+      <select value={value} onChange={e => onChange(e.target.value)} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm text-fg">
+        <option value="">{empty}</option>
+        {stations.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function SectionSheet({ c, stations, onClose, onSaved }: { c: Partial<MenuCategory>; stations: string[]; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = React.useState(c.name ?? "");
+  const [station, setStation] = React.useState(c.station ?? "");
   const [active, setActive] = React.useState(c.active ?? true);
   const [busy, setBusy] = React.useState(false);
   const save = async () => {
     setBusy(true);
-    try { await rpc("owner_save_category", { p: { id: c.id ?? "", name: name.trim(), active } }); toast("Section saved"); onSaved(); }
+    try { await rpc("owner_save_category", { p: { id: c.id ?? "", name: name.trim(), active, station } }); toast("Section saved"); onSaved(); }
     catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
   };
   const del = async () => {
@@ -110,6 +126,7 @@ function SectionSheet({ c, onClose, onSaved }: { c: Partial<MenuCategory>; onClo
     <Sheet open onOpenChange={o => !o && onClose()} title={c.id ? "Edit section" : "Add section"} description="Sections group dishes on the guest menu and in the POS.">
       <div className="grid gap-4">
         <Field label="Section name"><Input autoFocus value={name} maxLength={40} onChange={e => setName(e.target.value)} placeholder="e.g. Starters" /></Field>
+        <StationField value={station} onChange={setStation} stations={stations} empty="No station (every kitchen screen)" hint="Dishes in this section show on that station's kitchen screen." />
         <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
           <span><span className="block text-sm font-semibold text-fg">Show to guests</span><span className="text-[12px] text-fg-2">Switch off to hide the whole section for now.</span></span>
           <Switch checked={active} onChange={setActive} label="Show section to guests" />
@@ -122,7 +139,7 @@ function SectionSheet({ c, onClose, onSaved }: { c: Partial<MenuCategory>; onClo
   );
 }
 
-function DishSheet({ d, categories, restaurantId, onClose, onSaved }: { d: ItemDraft; categories: MenuCategory[]; restaurantId: string; onClose: () => void; onSaved: () => void }) {
+function DishSheet({ d, categories, stations, restaurantId, onClose, onSaved }: { d: ItemDraft; categories: MenuCategory[]; stations: string[]; restaurantId: string; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = React.useState<ItemDraft>(d);
   const [busy, setBusy] = React.useState(false);
   const [confirmDel, setConfirmDel] = React.useState(false);
@@ -178,6 +195,9 @@ function DishSheet({ d, categories, restaurantId, onClose, onSaved }: { d: ItemD
             <Input inputMode="decimal" disabled={f.sizes.length > 0} value={String(f.price)} onChange={e => set("price", Number(e.target.value.replace(/[^\d.]/g, "")) || 0)} className="num" />
           </Field>
         </div>
+        <StationField value={f.station ?? ""} onChange={v => set("station", v)} stations={stations}
+          empty={`Same as the section${categories.find(c => c.id === f.category_id)?.station ? ` (${categories.find(c => c.id === f.category_id)?.station})` : ""}`}
+          hint="Only if this dish is made somewhere else from the rest of its section." />
         <fieldset><legend className="mb-1.5 text-[13px] font-semibold text-fg">Type</legend>
           <Segmented<DietT> value={f.diet} onChange={v => set("diet", v)} options={[
             { value: "veg", label: <span className="flex items-center gap-1.5"><Diet diet="veg" />Veg</span> },

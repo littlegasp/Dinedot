@@ -14,23 +14,28 @@ export function SettingsScreen() {
   const [saved, setSaved] = React.useState<Settings | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [tips, setTips] = React.useState("");   // typed freely, read when saving
+  const [stations, setStations] = React.useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
-  React.useEffect(() => { rpc<Settings>("owner_settings").then(x => { setS(x); setSaved(x); setTips(x.tip_options.join(", ")); }).catch(e => toast((e as Error).message, "error")); }, []);
+  React.useEffect(() => { rpc<Settings>("owner_settings").then(x => { setS(x); setSaved(x); setTips(x.tip_options.join(", ")); setStations((x.stations ?? []).join(", ")); }).catch(e => toast((e as Error).message, "error")); }, []);
   if (!s) return <div className="grid gap-4">{[0, 1, 2].map(i => <Skeleton key={i} className="h-48" />)}</div>;
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS(x => x && { ...x, [k]: v });
   const num = (v: string) => Math.max(0, Math.min(100, Number(v.replace(/[^\d.]/g, "")) || 0));
   const tipList = [...new Set(tips.split(",").map(x => x.trim()).filter(Boolean).map(x => Math.round(num(x))))].slice(0, 6);
-  const dirty = JSON.stringify(s) !== JSON.stringify(saved) || tipList.join() !== saved?.tip_options.join();
+  const stationList = stations.split(",").map(x => x.trim().slice(0, 24)).filter(Boolean)
+    .filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);   // the same name once, first spelling kept
+  const dirty = JSON.stringify(s) !== JSON.stringify(saved) || tipList.join() !== saved?.tip_options.join() || stationList.join() !== (saved?.stations ?? []).join();
 
   const save = async () => {
     setBusy(true);
     try {
       const tip_options = tipList.length ? tipList : [0];
       const { restaurant_name, tagline, cover_url, welcome_note, closed_message, gst_pct, service_pct, upi_id, upi_name,
-        pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url } = s;
+        pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url, max_discount_pct } = s;
       await rpc("owner_save_settings", { p: { restaurant_name, tagline, cover_url, welcome_note, closed_message, gst_pct, service_pct,
-        tip_options, upi_id: upi_id.trim(), upi_name, pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url } });
-      const next = { ...s, tip_options }; setS(next); setSaved(next); setTips(tip_options.join(", ")); toast("Settings saved"); reload();
+        tip_options, upi_id: upi_id.trim(), upi_name, pay_cash, pay_card, pay_upi, wifi_name, wifi_password, google_review_url,
+        max_discount_pct, stations: stationList } });
+      const next = { ...s, tip_options, stations: stationList }; setS(next); setSaved(next); setTips(tip_options.join(", ")); setStations(stationList.join(", "));
+      toast("Settings saved"); reload();
     } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
   };
   const cover = async (f?: File | null) => {
@@ -70,6 +75,17 @@ export function SettingsScreen() {
           <Field label="Service charge %" hint="0 for none"><Input inputMode="decimal" className="num" value={String(s.service_pct)} onChange={e => set("service_pct", num(e.target.value))} /></Field>
           <Field label="Tip choices %" hint="Comma separated, e.g. 0, 5, 10">
             <Input value={tips} onChange={e => setTips(e.target.value.replace(/[^\d,\s]/g, ""))} /></Field>
+          <Field label="Manager discount limit %" hint="Managers can take up to this much off a bill. You (the owner) can give more.">
+            <Input inputMode="decimal" className="num" value={String(s.max_discount_pct ?? 20)} onChange={e => set("max_discount_pct", num(e.target.value))} /></Field>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Kitchen stations" sub="Split the kitchen screen so each counter sees only its own dishes." />
+        <div className="grid gap-3 px-5 pb-5">
+          <Field label="Stations" hint="Comma separated, up to 8, e.g. Tandoor, Curry, Bar. Then pick a station for each section in Menu.">
+            <Input value={stations} onChange={e => setStations(e.target.value)} placeholder="Leave empty for one kitchen screen" /></Field>
+          {stationList.length > 0 && <p className="text-[12px] text-fg-2">On each kitchen screen, pick its station at the top. A removed station is taken off its sections and dishes.</p>}
         </div>
       </Card>
 

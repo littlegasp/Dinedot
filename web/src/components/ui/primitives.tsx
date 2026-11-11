@@ -40,7 +40,7 @@ Input.displayName = "Input";
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1.5">
+    <label className="grid content-start gap-1.5">
       <span className="text-[13px] font-semibold text-fg">{label}</span>
       {children}
       {hint && <span className="text-[12px] text-fg-2">{hint}</span>}

@@ -15,7 +15,10 @@ export function tableState(v: LiveVisit | undefined): TableState {
   if (v.status === "bill") return "bill";
   return v.orders.some(o => o.status === "new" || o.status === "cooking") ? "ordered" : "food";
 }
-export const visitOf = (t: LiveTable, visits: LiveVisit[]) => visits.find(v => v.table_id === t.id);
+export const visitOf = (t: LiveTable, visits: LiveVisit[]) => visits.find(v => v.table_id === t.id && v.status !== "paid");
+/** How a bill is named on screen: its table number, or "Token 12" for takeaway. */
+export const visitLabel = (v: Pick<LiveVisit, "table_id" | "token">, tables: LiveTable[]) =>
+  v.table_id ? (tables.find(t => t.id === v.table_id)?.code ?? "") : `Token ${v.token}`;
 
 export function TableStatus({ state }: { state: TableState }) {
   const s = TABLE_STATE[state];

@@ -271,6 +271,7 @@ function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: b
       <ul className="grid gap-1 text-sm">{b.lines.map((l, i) => <li key={i} className="flex justify-between text-fg"><span><span className="num">{l.qty}×</span> {l.name}{l.size && ` · ${l.size}`}</span><span className="num">{inr(l.amount)}</span></li>)}</ul>
       <dl className="mt-3 grid gap-1 border-t border-border pt-3 text-[13px]">
         <div className="flex justify-between"><dt className="text-fg-2">Items</dt><dd className="num text-fg">{inr(b.subtotal, { paise: true })}</dd></div>
+        {(b.discount ?? 0) > 0 && <div className="flex justify-between"><dt className="text-fg-2">Discount{b.discount_kind === "pct" ? ` ${b.discount_value}%` : ""}</dt><dd className="num text-success">−{inr(b.discount!, { paise: true })}</dd></div>}
         {b.service > 0 && <div className="flex justify-between"><dt className="text-fg-2">Service {b.service_pct}%</dt><dd className="num text-fg">{inr(b.service, { paise: true })}</dd></div>}
         <div className="flex justify-between"><dt className="text-fg-2">GST {b.gst_pct}%</dt><dd className="num text-fg">{inr(b.gst, { paise: true })}</dd></div>
         {b.tip > 0 && <div className="flex justify-between"><dt className="text-fg-2">Tip {b.tip_pct}%</dt><dd className="num text-fg">{inr(b.tip)}</dd></div>}

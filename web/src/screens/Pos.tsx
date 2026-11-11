@@ -1,13 +1,13 @@
 "use client";
 import * as React from "react";
-import { Banknote, ChefHat, CreditCard, Layers, Minus, Plus, Search, Smartphone, Trash2, UtensilsCrossed } from "lucide-react";
+import { Banknote, ChefHat, CreditCard, HandPlatter, Layers, Minus, Percent, Plus, Search, ShoppingBag, Smartphone, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge, Card, Diet, EmptyState, Input, Skeleton } from "@/components/ui/primitives";
+import { Badge, Card, Diet, EmptyState, Field, Input, Segmented, Skeleton } from "@/components/ui/primitives";
 import { Dialog, toast } from "@/components/ui/overlay";
-import { TableStatus, tableState, visitOf } from "@/components/ui/status";
+import { TableStatus, tableState, visitLabel, visitOf } from "@/components/ui/status";
 import { newRequestId, rpc } from "@/lib/api";
 import { useAction, useStaff } from "@/lib/staff";
-import type { CartLine, LiveVisit, MenuItem, PayMethod, StaffMenu } from "@/lib/types";
+import type { Bill, CartLine, LiveVisit, MenuItem, PayPart, StaffMenu } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
 
 export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | null; setTableId: (id: string) => void; payNow: boolean }) {
@@ -20,6 +20,7 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
   const [note, setNote] = React.useState("");
   const [pick, setPick] = React.useState<MenuItem | null>(null);
   const [pay, setPay] = React.useState(false);
+  const [disc, setDisc] = React.useState(false);
   const request = React.useRef<string | null>(null);   // kept across retries of the same send
 
   const loadMenu = React.useCallback(() => rpc<StaffMenu>("staff_menu").then(setMenu).catch(e => toast((e as Error).message, "error")), []);
@@ -30,8 +31,14 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
   if (!live || !menu) return <div className="grid gap-4 xl:grid-cols-[1fr_400px]"><Skeleton className="h-[520px]" /><Skeleton className="h-[520px]" /></div>;
 
   const tables = live.tables.filter(t => t.active);
-  const table = tables.find(t => t.id === tableId) ?? null;
-  const visit: LiveVisit | undefined = table ? visitOf(table, live.visits) : undefined;
+  // ?table= holds a table id, "takeaway" for a new token, or the visit id of an open takeaway token
+  const tokens = live.visits.filter(v => v.kind === "takeaway");
+  const token = tokens.find(v => v.id === tableId);
+  const takeaway = tableId === "takeaway" || !!token;
+  const table = takeaway ? null : tables.find(t => t.id === tableId) ?? null;
+  const visit: LiveVisit | undefined = token ?? (table ? visitOf(table, live.visits) : undefined);
+  const name = token ? `Token ${token.token}` : takeaway ? "New takeaway" : table ? `Table ${table.code}` : "";
+  const paidTakeaway = token?.status === "paid";
   const activeCats = menu.categories.filter(c => c.active);
   const items = menu.items.filter(i => activeCats.some(c => c.id === i.category_id) && (cat === "all" || i.category_id === cat)
     && i.name.toLowerCase().includes(q.trim().toLowerCase()));
@@ -48,20 +55,38 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
   const qty = (key: string, n: number) => setCart(c => c.flatMap(l => l.key !== key ? [l] : l.qty + n <= 0 ? [] : [{ ...l, qty: l.qty + n }]));
 
   const send = async () => {
-    if (!table) return toast("Pick a table first", "error");
+    if (!table && !takeaway) return toast("Pick a table first", "error");
     request.current ??= newRequestId();
-    const ok = await run(() => rpc("staff_add_order", {
-      p_table: table.id, p_note: note.trim(), p_request_id: request.current,
-      p_items: cart.map(l => ({ id: l.id, qty: l.qty, size: l.size ?? "", addons: l.addons ?? [] })),
-    }).then(() => true), `Sent to the kitchen · ${table.code}`);
+    const p_items = cart.map(l => ({ id: l.id, qty: l.qty, size: l.size ?? "", addons: l.addons ?? [] }));
+    if (takeaway) {
+      const r = await run(() => rpc<{ visit_id: string; token: number }>("staff_takeaway_order", {
+        p_visit: token?.id ?? null, p_items, p_note: note.trim(), p_request_id: request.current }));
+      if (r) { setCart([]); setNote(""); toast(`Sent to the kitchen · Token ${r.token}`); if (!token) setTableId(r.visit_id); }
+      return;
+    }
+    const ok = await run(() => rpc("staff_add_order", { p_table: table!.id, p_note: note.trim(), p_request_id: request.current, p_items }).then(() => true),
+      `Sent to the kitchen · ${table!.code}`);
     if (ok) { setCart([]); setNote(""); }
   };
+  const handOver = () => run(async () => {
+    for (const o of token!.orders.filter(o => o.status === "ready")) await rpc("staff_order_status", { p_order: o.id, p_status: "served" });
+  }, `Token ${token!.token} handed over`);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="min-w-0">
         {/* Tables */}
         <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0" role="radiogroup" aria-label="Table">
+          <button role="radio" aria-checked={tableId === "takeaway"} onClick={() => setTableId("takeaway")}
+            className={cn("flex h-12 shrink-0 items-center gap-1.5 rounded-[var(--radius)] border border-dashed border-border-strong bg-surface px-3 text-sm font-bold text-fg",
+              tableId === "takeaway" && "border-solid border-ink bg-ink text-surface")}><ShoppingBag className="size-4" aria-hidden />Takeaway</button>
+          {tokens.map(v => { const ready = v.orders.some(o => o.status === "ready"); return (
+            <button key={v.id} role="radio" aria-checked={v.id === tableId} aria-label={`Token ${v.token}${v.status === "paid" ? ", paid" : ""}${ready ? ", ready" : ""}`} onClick={() => setTableId(v.id)}
+              className={cn("flex h-12 shrink-0 items-center gap-2 rounded-[var(--radius)] border border-border bg-surface px-3 text-sm font-bold text-fg",
+                v.id === tableId && "border-ink bg-ink text-surface")}>
+              #{v.token}<span className={cn("size-2 rounded-full", ready ? "bg-success" : v.status === "paid" ? "bg-blue" : "bg-warning")} aria-hidden />
+            </button>
+          ); })}
           {tables.map(t => { const st = tableState(visitOf(t, live.visits)); return (
             <button key={t.id} role="radio" aria-checked={t.id === tableId} onClick={() => setTableId(t.id)}
               className={cn("flex h-12 shrink-0 items-center gap-2 rounded-[var(--radius)] border border-border bg-surface px-3 text-sm font-bold text-fg",
@@ -116,10 +141,13 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
       <Card id="ticket" className="flex scroll-mt-20 flex-col xl:sticky xl:top-20 xl:max-h-[calc(100dvh-104px)]">
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-extrabold text-fg">{table ? `Table ${table.code}` : "Pick a table"}</h2>
-            <p className="text-[12px] text-fg-2">{table ? (visit ? `${visit.guests ? `${visit.guests} guests · ` : ""}${visit.orders.length} order${visit.orders.length === 1 ? "" : "s"} so far` : "Free table") : "Choose a table above to start"}</p>
+            <h2 className="text-lg font-extrabold text-fg">{name || "Pick a table"}</h2>
+            <p className="text-[12px] text-fg-2">{takeaway
+              ? (token ? `Takeaway · ${token.orders.length} order${token.orders.length === 1 ? "" : "s"}${paidTakeaway ? " · paid" : ""}` : "A token number is given when you tap Send")
+              : table ? (visit ? `${visit.guests ? `${visit.guests} guests · ` : ""}${visit.orders.length} order${visit.orders.length === 1 ? "" : "s"} so far` : "Free table") : "Choose a table or Takeaway above to start"}</p>
           </div>
-          {visit && <TableStatus state={tableState(visit)} />}
+          {visit && !takeaway && <TableStatus state={tableState(visit)} />}
+          {token && <Badge tone={paidTakeaway ? "blue" : "warning"}><ShoppingBag aria-hidden />{paidTakeaway ? "Paid" : "Takeaway"}</Badge>}
         </div>
         <div className="flex-1 overflow-auto px-5">
           {visit && visit.bill.lines.length > 0 && (
@@ -148,12 +176,15 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
               ))}
             </ul>
           )}
+          {paidTakeaway && <p className="mt-3 rounded-[var(--radius)] bg-blue-soft px-3 py-2 text-[13px] font-semibold text-fg">Paid. {token!.orders.some(o => o.status === "ready") ? "Ready to hand over." : "Waiting for the kitchen."}</p>}
           {cart.length > 0 && <Input value={note} onChange={e => setNote(e.target.value)} maxLength={300} placeholder="Note for the kitchen (less spicy, no onion…)" className="mb-3" aria-label="Note for the kitchen" />}
         </div>
         <div className="border-t border-border px-5 py-4">
           {visit && (
             <dl className="mb-3 grid gap-1 text-[13px]">
               <Row k="Items" v={inr(visit.bill.subtotal, { paise: true })} />
+              {(visit.bill.discount ?? 0) > 0 && <Row k={<span>Discount{visit.bill.discount_kind === "pct" ? ` ${visit.bill.discount_value}%` : ""}<span className="block text-[11px]">{visit.bill.discount_reason}</span></span>}
+                v={`− ${inr(visit.bill.discount!, { paise: true })}`} />}
               {visit.bill.service > 0 && <Row k={`Service ${visit.bill.service_pct}%`} v={inr(visit.bill.service, { paise: true })} />}
               <Row k={`GST ${visit.bill.gst_pct}%`} v={inr(visit.bill.gst, { paise: true })} />
               {visit.bill.tip > 0 && <Row k={`Tip ${visit.bill.tip_pct}%`} v={inr(visit.bill.tip)} />}
@@ -164,18 +195,27 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
             <span className="num font-display text-[28px] font-extrabold text-fg">{inr(visit ? visit.bill.grand : cartTotal)}</span>
           </div>
           {cart.length > 0 && visit && <p className="num text-right text-[12px] text-fg-2">+ {inr(cartTotal)} once sent (before tax)</p>}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button size="xl" variant="ink" disabled={!cart.length || !table || pending} onClick={send}><ChefHat />Send</Button>
-            <Button size="xl" variant="primary" disabled={!visit || pending} onClick={() => setPay(true)}>Take payment</Button>
+          {paidTakeaway ? (
+            <Button size="xl" variant="success" className="mt-3 w-full" disabled={pending || !token!.orders.some(o => o.status === "ready")} onClick={handOver}><HandPlatter />Handed over</Button>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button size="xl" variant="ink" disabled={!cart.length || (!table && !takeaway) || pending} onClick={send}><ChefHat />Send</Button>
+              <Button size="xl" variant="primary" disabled={!visit || pending} onClick={() => setPay(true)}>Take payment</Button>
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-3">
+            {cart.length > 0 && <button className="flex items-center gap-1 text-[12px] font-semibold text-fg-2" onClick={() => setCart([])}><Trash2 className="size-3.5" />Clear new items</button>}
+            {visit && !paidTakeaway && can("manage") && visit.bill.subtotal > 0 && (
+              <button className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-blue" onClick={() => setDisc(true)}><Percent className="size-3.5" />{(visit.bill.discount ?? 0) > 0 ? "Change discount" : "Discount"}</button>)}
           </div>
-          {cart.length > 0 && <button className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-fg-2" onClick={() => setCart([])}><Trash2 className="size-3.5" />Clear new items</button>}
         </div>
       </Card>
 
       <Dialog open={!!pick} onOpenChange={o => !o && setPick(null)} title={pick?.name ?? ""} description="Choose a size and any extras.">
         {pick && <Picker i={pick} onAdd={(s, a) => { add(pick, s, a); setPick(null); }} />}
       </Dialog>
-      {visit && <PayDialog open={pay} onOpenChange={setPay} visit={visit} tableCode={table!.code} canEdit={can("floor")} />}
+      {visit && !paidTakeaway && <PayDialog open={pay} onOpenChange={setPay} visit={visit} label={visitLabel(visit, live.tables)} canEdit={can("floor")} />}
+      {visit && !paidTakeaway && <DiscountDialog open={disc} onOpenChange={setDisc} visit={visit} limit={live.settings.max_discount_pct} owner={can("own")} />}
     </div>
   );
 }
@@ -208,32 +248,48 @@ function Picker({ i, onAdd }: { i: MenuItem; onAdd: (s?: { name: string; price: 
   );
 }
 
-const METHODS: { m: PayMethod; label: string; Icon: typeof Smartphone }[] = [
+type Single = "upi" | "card" | "cash";
+const METHODS: { m: Single | "split"; label: string; Icon: typeof Smartphone }[] = [
   { m: "upi", label: "UPI", Icon: Smartphone }, { m: "card", label: "Card", Icon: CreditCard },
-  { m: "cash", label: "Cash", Icon: Banknote }, { m: "mixed", label: "Mixed", Icon: Layers },
+  { m: "cash", label: "Cash", Icon: Banknote }, { m: "split", label: "Split", Icon: Layers },
 ];
+const LABEL: Record<Single, string> = { upi: "UPI", card: "Card", cash: "Cash" };
+const amt = (s: string) => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
+type Part = { method: Single; amount: string; reference: string };
 
-function PayDialog({ open, onOpenChange, visit, tableCode, canEdit }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; tableCode: string; canEdit: boolean }) {
+function PayDialog({ open, onOpenChange, visit, label, canEdit }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; label: string; canEdit: boolean }) {
   const { run, pending } = useAction();
-  const [method, setMethod] = React.useState<PayMethod>("upi");
+  const [method, setMethod] = React.useState<Single | "split">("upi");
   const [ref, setRef] = React.useState("");
   const [given, setGiven] = React.useState("");
-  React.useEffect(() => { if (open) { setMethod((visit.pay_choice || "upi") as PayMethod); setRef(""); setGiven(""); } }, [open, visit.pay_choice]);
-  const b = visit.bill;
-  const kitchen = visit.orders.some(o => o.status === "new" || o.status === "cooking");
+  const [parts, setParts] = React.useState<Part[]>([]);
+  const b: Bill = visit.bill;
+  React.useEffect(() => { if (open) { setMethod((visit.pay_choice || "upi") as Single); setRef(""); setGiven(""); setParts([]); } }, [open, visit.pay_choice]);
+  // Split: start with two parts, the first half UPI and the rest cash
+  React.useEffect(() => { if (method === "split" && parts.length === 0) {
+    const half = Math.ceil(b.grand / 2); setParts([{ method: "upi", amount: String(half), reference: "" }, { method: "cash", amount: String(b.grand - half), reference: "" }]); } }, [method, parts.length, b.grand]);
+  const kitchen = visit.kind === "dine_in" && visit.orders.some(o => o.status === "new" || o.status === "cooking");
   const update = (p: { p_split?: number; p_tip_pct?: number }) =>
     run(() => rpc("staff_visit_update", { p_visit: visit.id, p_split: p.p_split ?? visit.split, p_tip_pct: p.p_tip_pct ?? visit.tip_pct, p_guests: visit.guests }));
+  const partSum = Math.round(parts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
+  const left = Math.round((b.grand - partSum) * 100) / 100;
+  const setPart = (i: number, x: Partial<Part>) => setParts(ps => ps.map((p, j) => j === i ? { ...p, ...x } : p));
+  const payload: PayPart[] = method === "split"
+    ? parts.map(p => ({ method: p.method, amount: Number(p.amount) || 0, reference: p.method === "cash" ? "" : p.reference.trim() }))
+    : [{ method, amount: b.grand, reference: method === "cash" ? "" : ref.trim() }];
+  const ready = method !== "split" || (left === 0 && parts.every(p => Number(p.amount) > 0));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={`Take payment · ${tableCode}`} description="The total comes from the server. Each payment is saved with its method and reference.">
+    <Dialog open={open} onOpenChange={onOpenChange} title={`Take payment · ${label}`} description="The total comes from the server. Each payment is saved with its method and reference.">
       <div className="rounded-[var(--radius)] bg-muted px-4 py-3">
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-semibold text-fg-2">To pay</span>
           <span className="num font-display text-[30px] font-extrabold text-fg">{inr(b.grand)}</span>
         </div>
+        {(b.discount ?? 0) > 0 && <p className="num text-right text-[13px] text-fg-2">includes {inr(b.discount!, { paise: true })} discount</p>}
         {b.split > 1 && <p className="num text-right text-[13px] text-fg-2">{b.split} ways · {inr(b.each)} each</p>}
       </div>
-      {canEdit && (
+      {canEdit && visit.kind === "dine_in" && (
         <div className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
           <label className="grid gap-1"><span className="font-semibold text-fg">Split</span>
             <select value={visit.split} disabled={pending} onChange={e => update({ p_split: +e.target.value })} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-fg">
@@ -253,7 +309,27 @@ function PayDialog({ open, onOpenChange, visit, tableCode, canEdit }: { open: bo
           </button>
         ))}
       </div>
-      {method === "cash" ? (
+      {method === "split" ? (
+        <div className="mt-3 grid gap-2">
+          {parts.map((p, i) => (
+            <div key={i} className="grid grid-cols-[96px_minmax(0,1fr)_auto] gap-2 rounded-[var(--radius)] border border-border p-2">
+              <select value={p.method} aria-label={`Payment ${i + 1} method`} onChange={e => setPart(i, { method: e.target.value as Single })}
+                className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-sm font-semibold text-fg">
+                {(Object.keys(LABEL) as Single[]).map(m => <option key={m} value={m}>{LABEL[m]}</option>)}
+              </select>
+              <Input inputMode="decimal" value={p.amount} aria-label={`Payment ${i + 1} amount`} className="num font-bold" onChange={e => setPart(i, { amount: amt(e.target.value) })} />
+              <Button size="icon" variant="ghost" aria-label={`Remove payment ${i + 1}`} disabled={parts.length <= 2} onClick={() => setParts(ps => ps.filter((_, j) => j !== i))}><X /></Button>
+              {p.method !== "cash" && <Input className="col-span-3 h-9" value={p.reference} maxLength={60} aria-label={`Payment ${i + 1} reference`}
+                placeholder={p.method === "upi" ? "UPI reference (UTR), optional" : "Card slip number, optional"} onChange={e => setPart(i, { reference: e.target.value })} />}
+            </div>
+          ))}
+          <div className="flex items-center gap-2">
+            {parts.length < 6 && <Button size="sm" variant="ghost" onClick={() => setParts(ps => [...ps, { method: "card", amount: left > 0 ? String(left) : "", reference: "" }])}><Plus />Add a payment</Button>}
+            <span className={cn("num ml-auto text-sm font-semibold", left === 0 ? "text-success" : "text-danger")}>
+              {left === 0 ? "Adds up" : left > 0 ? `${inr(left, { paise: true })} still to add` : `${inr(-left, { paise: true })} too much`}</span>
+          </div>
+        </div>
+      ) : method === "cash" ? (
         <div className="mt-3 grid gap-1.5">
           <Input inputMode="numeric" value={given} onChange={e => setGiven(e.target.value.replace(/\D/g, ""))} placeholder="Cash handed over (optional)" aria-label="Cash handed over" className="num h-12 font-display text-lg font-bold" />
           {Number(given) > b.grand && <p className="text-sm font-semibold text-success">Give back {inr(Number(given) - b.grand)} in change.</p>}
@@ -261,13 +337,51 @@ function PayDialog({ open, onOpenChange, visit, tableCode, canEdit }: { open: bo
         </div>
       ) : (
         <Input className="mt-3" value={ref} maxLength={60} onChange={e => setRef(e.target.value)}
-          placeholder={method === "upi" ? "UPI reference (UTR), optional" : method === "card" ? "Card slip number, optional" : "How it was split, e.g. ₹500 cash + rest UPI"} aria-label="Payment reference" />
+          placeholder={method === "upi" ? "UPI reference (UTR), optional" : "Card slip number, optional"} aria-label="Payment reference" />
       )}
       {kitchen && <p className="mt-3 rounded-[var(--radius)] bg-warning-soft px-3 py-2 text-[13px] font-semibold text-warning-strong">Some dishes are still with the kitchen. Serve or cancel them before closing the bill.</p>}
-      <Button size="xl" variant="primary" className="mt-4 w-full" disabled={pending || kitchen}
-        onClick={async () => { const ok = await run(() => rpc("staff_mark_paid", { p_visit: visit.id, p_method: method, p_reference: method === "cash" ? "" : ref.trim() }).then(() => true), `Paid · table ${tableCode} is free`); if (ok) onOpenChange(false); }}>
+      <Button size="xl" variant="primary" className="mt-4 w-full" disabled={pending || kitchen || !ready}
+        onClick={async () => { const ok = await run(() => rpc("staff_pay", { p_visit: visit.id, p_parts: payload }).then(() => true),
+          visit.kind === "takeaway" ? `Paid · ${label}` : `Paid · table ${label} is free`); if (ok) onOpenChange(false); }}>
         Mark paid · {inr(b.grand)}
       </Button>
+    </Dialog>
+  );
+}
+
+function DiscountDialog({ open, onOpenChange, visit, limit, owner }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; limit: number; owner: boolean }) {
+  const { run, pending } = useAction();
+  const b = visit.bill;
+  const [kind, setKind] = React.useState<"pct" | "amount">("pct");
+  const [value, setValue] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  React.useEffect(() => { if (open) { setKind(b.discount_kind ?? "pct"); setValue(b.discount_value ? String(b.discount_value) : ""); setReason(b.discount_reason ?? ""); } },
+    [open, b.discount_kind, b.discount_value, b.discount_reason]);
+  const v = Number(value) || 0;
+  const off = kind === "pct" ? Math.round(b.subtotal * v) / 100 : Math.min(v, b.subtotal);
+  const over = !owner && (kind === "pct" ? v > limit : off > Math.round(b.subtotal * limit) / 100);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} title="Discount" description={owner ? "Comes off the items before GST. Saved in the activity history with the reason." : `Managers can take up to ${limit}% off. Saved in the activity history with the reason.`}>
+      <div className="grid gap-4">
+        <Segmented<"pct" | "amount"> value={kind} onChange={setKind} options={[{ value: "pct", label: "Percent" }, { value: "amount", label: "Amount (₹)" }]} />
+        <div className="flex flex-wrap gap-2">
+          {(kind === "pct" ? [5, 10, 15, 20].filter(x => owner || x <= limit) : [50, 100, 200]).map(x => (
+            <button key={x} onClick={() => setValue(String(x))} aria-pressed={v === x}
+              className={cn("h-10 rounded-full border border-border px-4 text-sm font-semibold text-fg", v === x && "border-blue bg-blue-soft")}>{kind === "pct" ? `${x}%` : inr(x)}</button>))}
+        </div>
+        <Field label={kind === "pct" ? "Percent off" : "Amount off (₹)"}>
+          <Input inputMode="decimal" value={value} onChange={e => setValue(amt(e.target.value))} className="num" aria-label="Discount value" /></Field>
+        <Field label="Reason" hint="For example: regular guest, food was late, staff meal">
+          <Input value={reason} maxLength={200} onChange={e => setReason(e.target.value)} /></Field>
+        <p className={cn("num text-sm font-semibold", over ? "text-danger" : "text-fg")}>
+          {over ? `That's more than ${limit}%. Ask the owner.` : `${inr(off, { paise: true })} off ${inr(b.subtotal, { paise: true })} of items`}</p>
+        <Button size="lg" variant="primary" disabled={pending || !v || over || reason.trim().length < 3}
+          onClick={async () => { const ok = await run(() => rpc("staff_set_discount", { p_visit: visit.id, p_kind: kind, p_value: v, p_reason: reason.trim() }).then(() => true), "Discount added"); if (ok) onOpenChange(false); }}>
+          Give discount</Button>
+        {(b.discount ?? 0) > 0 && <Button variant="ghost" disabled={pending}
+          onClick={async () => { const ok = await run(() => rpc("staff_set_discount", { p_visit: visit.id, p_kind: "none", p_value: 0, p_reason: "" }).then(() => true), "Discount removed"); if (ok) onOpenChange(false); }}>
+          Remove discount</Button>}
+      </div>
     </Dialog>
   );
 }

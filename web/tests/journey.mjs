@@ -106,6 +106,53 @@ try {
   await staff.locator("#ticket").getByText("Already ordered").waitFor();
   ok("POS sends a dine-in order with a size, bill comes back from the server");
 
+  // ---- 0005: takeaway token, discount, split payment ----
+  await staff.getByRole("radio", { name: "Takeaway", exact: true }).click();
+  await staff.getByRole("button", { name: /Paneer Tikka/ }).first().click();
+  const extra = staff.getByRole("dialog");
+  if (await extra.isVisible().catch(() => false)) await extra.getByRole("button", { name: /^Add ·/ }).click();
+  await staff.getByRole("button", { name: /Butter Naan/ }).first().click();
+  if (await extra.isVisible().catch(() => false)) await extra.getByRole("button", { name: /^Add ·/ }).click();
+  await staff.locator("#ticket").getByRole("button", { name: "Send" }).click();
+  await staff.getByText(/Sent to the kitchen · Token 1/).waitFor();
+  await staff.locator("#ticket").getByRole("heading", { name: "Token 1" }).waitFor();
+  ok("POS: takeaway order gets token 1");
+  await staff.locator("#ticket").getByRole("button", { name: "Discount" }).click();
+  const dd = staff.getByRole("dialog", { name: "Discount" });
+  await dd.getByRole("button", { name: "10%" }).click();
+  await dd.getByLabel("Reason").fill("Regular guest");
+  await dd.getByRole("button", { name: "Give discount" }).click();
+  await staff.getByText("Discount added").waitFor();
+  await staff.locator("#ticket").getByText("Discount 10%").waitFor();
+  ok("POS: owner gives a 10% discount with a reason");
+  await staff.locator("#ticket").getByRole("button", { name: "Take payment" }).click();
+  const sp = staff.getByRole("dialog", { name: /Take payment/ });
+  await sp.getByRole("button", { name: "Split" }).click();
+  await sp.getByText("Adds up").waitFor();
+  await sp.getByLabel("Payment 1 reference").fill("UTR778899");
+  await sp.getByRole("button", { name: /Mark paid/ }).click();
+  await staff.getByText("Paid · Token 1").waitFor();
+  await staff.locator("#ticket").getByText(/Paid\. Waiting for the kitchen/).waitFor();
+  ok("POS: takeaway paid in two parts before the food is ready");
+
+  // Kitchen: Tandoor station sees only its dishes and ticks them off
+  await staff.goto(BASE + "#/kitchen");
+  await staff.getByRole("radio", { name: "Tandoor" }).click();
+  const tk = staff.locator("article", { hasText: "Token 1" }).first();
+  await tk.getByText(/Takeaway · paid/).waitFor();
+  await tk.getByRole("button", { name: /Paneer Tikka/ }).click();
+  await tk.getByRole("button", { name: /Paneer Tikka, done/ }).waitFor();
+  await tk.getByRole("button", { name: /Butter Naan/ }).click();
+  await staff.locator("section[aria-label=ready] article", { hasText: "Token 1" }).waitFor();
+  ok("kitchen: station filter, dishes ticked one by one, order moves to Ready");
+  await staff.getByRole("radio", { name: "All stations" }).click();
+  await staff.goto(BASE + "#/pos?table=takeaway");
+  await staff.getByRole("radio", { name: /Token 1, paid, ready/ }).click();
+  await staff.locator("#ticket").getByRole("button", { name: "Handed over" }).click();
+  await staff.getByText("Token 1 handed over").waitFor();
+  await staff.getByRole("radio", { name: /Token 1/ }).waitFor({ state: "detached" });
+  ok("POS: token handed over and leaves the screen");
+
   // ---- Manage screens (owner) ----
   const nav = async (route) => { await staff.goto(BASE + "#/" + route); await staff.waitForTimeout(300); };
   await nav("menu");
@@ -173,6 +220,37 @@ try {
   await staff.getByRole("button", { name: "Tables & QR" }).last().click();
   await staff.getByText(/Print QR codes prints one card per table/).waitFor();
   ok("help: what's new and the Tables & QR guide");
+
+  // ---- 0005: team notice and closing the day ----
+  await nav("today");
+  await staff.getByLabel("Team notice").fill("Biryani is off tonight.");
+  await staff.getByRole("button", { name: "Post" }).click();
+  await staff.getByText("Notice posted").waitFor();
+  await staff.getByRole("status").filter({ hasText: "Team notice from Meera: Biryani is off tonight." }).waitFor();
+  ok("today: owner posts a team notice; it shows at the top");
+  await staff.getByRole("button", { name: "Close the day" }).click();
+  const cd = staff.getByRole("dialog", { name: /^Close / });
+  await cd.getByText(/still open/).waitFor();
+  await staff.keyboard.press("Escape");
+  // clear the tables still open in the demo, then close for real
+  await staff.evaluate(async () => { const D = window.Demo; const live = await D.rpc("staff_live");
+    for (const v of live.visits.filter(v => v.status !== "paid")) await D.rpc("staff_void_visit", { p_visit: v.id, p_reason: "end of test" }); });
+  await staff.reload();
+  await staff.getByRole("button", { name: "Close the day" }).click();
+  await cd.getByLabel("Opening cash (₹)").fill("1000");
+  const expected = Number((await cd.locator("div", { hasText: /^Expected in the drawer/ }).locator("dd").first().textContent()).replace(/[^\d.]/g, ""));
+  await cd.getByLabel("Cash counted").fill(String(expected - 20));
+  await cd.getByText(/₹20 short/).waitFor();
+  await cd.getByRole("button", { name: "Close the day" }).click();
+  await staff.getByText("Day closed").waitFor();
+  await staff.getByText(/Today has been closed/).first().waitFor();
+  ok("today: cash counted against expected, day closed (₹20 short shown)");
+  await staff.getByRole("button", { name: "See the count" }).click();
+  const rc = staff.getByRole("dialog", { name: /is closed/ });
+  await rc.getByPlaceholder(/Why/).fill("Late table came in");
+  await rc.getByRole("button", { name: "Reopen day" }).click();
+  await staff.getByText("Day reopened").waitFor();
+  ok("today: owner reopens the day with a reason");
 
   if (errors.length) throw new Error("Page errors:\n" + [...new Set(errors)].join("\n"));
   console.log(`DINEOS JOURNEY PASSED (${W}px)`);
