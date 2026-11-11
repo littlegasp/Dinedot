@@ -11,8 +11,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 const preview = process.env.PREVIEW === "1";
 const build = process.env.NEXT_PUBLIC_BUILD || new Date().toISOString().replace(/\D/g, "").slice(0, 14);
 process.env.NEXT_PUBLIC_BUILD = build;
-mkdirSync("public", { recursive: true });
-writeFileSync("public/version.json", JSON.stringify({ build }) + "\n");
+try {
+  mkdirSync("public", { recursive: true });
+  writeFileSync("public/version.json", JSON.stringify({ build }) + "\n");
+} catch { /* read-only checkout: the update bar simply stays quiet */ }
 
 const nextConfig: NextConfig = {
   output: "export",

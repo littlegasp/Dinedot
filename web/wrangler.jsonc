@@ -1,0 +1,13 @@
+{
+  // DineOS is a set of static files served by Cloudflare (free, unlimited requests).
+  // There is no Worker code, so Cloudflare's 10 ms per-request limit never applies:
+  // `npm run build` writes the site to out/ and `npx wrangler deploy` uploads it.
+  // Same setup as Studio CRM / tdw-crm.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dineos",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "out",
+    "not_found_handling": "404-page"
+  }
+}

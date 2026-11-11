@@ -8,7 +8,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "predev": "node scripts/copy-demo.mjs",
-    "prebuild": "node scripts/copy-demo.mjs"
+    "prebuild": "node scripts/copy-demo.mjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "engines": {
     "node": ">=20"
@@ -39,6 +40,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.27",
     "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.151.0"
   }
 }
