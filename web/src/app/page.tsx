@@ -53,6 +53,8 @@ function Staff() {
   const allowed = (r: Route) => r === "design" || NAV.some(n => n.route === r && n.roles.includes(role));
   const route: Route = loc.route && allowed(loc.route) ? loc.route : HOME[role];
   const tableId = loc.params.get("table");
+  // a screen this role can't open (an old link, someone else's bookmark): show home and say so in the address bar
+  if (loc.route !== route && typeof window !== "undefined") history.replaceState(null, "", `#/${route}`);
 
   const page: Record<Route, { title: string; sub?: string; el: React.ReactNode; bleed?: boolean }> = {
     today: { title: `Good ${greeting()}, ${me.name.split(" ")[0]}`, sub: today, el: <TodayScreen go={go} /> },

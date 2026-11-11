@@ -7,6 +7,7 @@ import type { Route } from "@/lib/routes";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "11 Nov 2026", text: "Opening a link to a screen your role can't use now takes you to your home screen, and the address bar shows where you are." },
   { date: "11 Nov 2026", text: "New screens: Menu, Tables & QR, Team, Settings, Bills and this Help guide. Everything a restaurant needs to run on DineOS on its own." },
   { date: "11 Nov 2026", text: "Forgot your password? The link in the email now opens a page to set a new one." },
   { date: "11 Nov 2026", text: "DineOS is live: Today, POS, Floor, Kitchen and the guest QR page work on real data." },
