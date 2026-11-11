@@ -23,8 +23,8 @@ QR table ordering for restaurants: guests scan a table QR, order from the menu, 
 - Screens (`src/lib/routes.ts` = the list and roles): Today, POS, Floor, Kitchen, Bills · Menu, Tables & QR (QR via qrcode-generator 1.4.4, print sheet `@media print` in globals.css), Team (role/on/name via `owner_edit_staff`; add/password/delete/email via team-admin), Settings · Help. Password-reset links (`#…type=recovery`) open Set a new password (`Auth.takeRecovery`).
 - **Help guide rule (DineOS):** `src/content/guide.ts` — `GUIDE` is `Record<Route, Section>` so a screen without a Help section doesn't build; every visible change updates its section + a `WHATS_NEW` line in the same commit.
 - Photos upload to `menu-photos/<restaurant_id>/…` (`uploadPhoto` in api.ts).
-- Live: https://dineos.littlegasp-orders.workers.dev (Cloudflare account littlegasp.orders, project `dineos`, production branch `dineos`). Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), migrations 0001–0004 + sample menu run 11 Nov 2026, sign-ups off.
-- 0005 is written and tested on branch `dineos-0005` (not yet run on the live Supabase). Still not built: push alerts, offline order queue, receipts, guided tour, cashier role.
+- Live: https://dineos.littlegasp-orders.workers.dev (Cloudflare account littlegasp.orders, project `dineos`, production branch `dineos`). Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), migrations 0001–0005 + sample menu run 11 Nov 2026, sign-ups off.
+- 0005 run on the live Supabase 11 Nov 2026 (lockdown re-checked: anon = 6 guest functions, helpers granted to nobody, no table grants). Still not built: push alerts, offline order queue, receipts, guided tour, cashier role.
 
 ## Files
 - `t.html` + `guest.js` + `guest.css` — guest page (`t.html?k=<token>`). Mobile-first, dark by default with a light version; accent colour from Settings.
