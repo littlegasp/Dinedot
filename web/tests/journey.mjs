@@ -15,7 +15,8 @@ const watch = p => { p.on("pageerror", e => errors.push(e.message)); p.on("conso
 
 async function signIn(page, role) {
   await page.goto(BASE + "#/");
-  await page.evaluate(() => localStorage.removeItem("dd.demo.user"));
+  // sign out and clear the address, so the next person starts on their own home screen
+  await page.evaluate(() => { localStorage.removeItem("dd.demo.user"); history.replaceState(null, "", location.pathname); });
   await page.reload();
   await page.getByRole("button", { name: new RegExp(role) }).first().click();
   await page.waitForSelector("main");

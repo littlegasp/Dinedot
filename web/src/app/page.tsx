@@ -47,14 +47,21 @@ function Staff() {
   const [today, setToday] = React.useState("");
   React.useEffect(() => { setToday(new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })); }, []);
 
+  // A screen this role can't open (an old link, someone else's bookmark) shows home; fix the address bar
+  // after drawing, and only if the address still points at that screen (so it never races a real move).
+  const shown = me && role ? (loc.route && (loc.route === "design" || NAV.some(n => n.route === loc.route && n.roles.includes(role))) ? loc.route : HOME[role]) : null;
+  React.useEffect(() => {
+    if (!shown || loc.route === shown) return;
+    if (parse().route === loc.route) history.replaceState(null, "", `#/${shown}`);
+  }, [shown, loc.route]);
+
   if (!me) return error ? <p className="p-8 text-center text-sm text-danger">{error}</p> : null;
   if (!role) return <NoRestaurant />;
 
   const allowed = (r: Route) => r === "design" || NAV.some(n => n.route === r && n.roles.includes(role));
   const route: Route = loc.route && allowed(loc.route) ? loc.route : HOME[role];
   const tableId = loc.params.get("table");
-  // a screen this role can't open (an old link, someone else's bookmark): show home and say so in the address bar
-  if (loc.route !== route && typeof window !== "undefined") history.replaceState(null, "", `#/${route}`);
+
 
   const page: Record<Route, { title: string; sub?: string; el: React.ReactNode; bleed?: boolean }> = {
     today: { title: `Good ${greeting()}, ${me.name.split(" ")[0]}`, sub: today, el: <TodayScreen go={go} /> },
