@@ -8,6 +8,7 @@ import { rpc, teamAdmin } from "@/lib/api";
 import { useStaff } from "@/lib/staff";
 import type { Role, TeamMember } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 export const ROLE_INFO: Record<Role, { label: string; what: string }> = {
   owner: { label: "Owner", what: "Everything, including Team and Settings" },
@@ -69,7 +70,7 @@ function MemberSheet({ m, self, onClose, onSaved }: { m: Partial<TeamMember>; se
         setBusy(true);
         try {
           const r = await teamAdmin({ action: "add", ...f, password: pw }) as { existing?: boolean } | null;
-          toast(r?.existing ? `${f.name} already had a DineOS login, so they're added to your team. They sign in with their own password.`
+          toast(r?.existing ? `${f.name} already had a ${BRAND.name} login, so they're added to your team. They sign in with their own password.`
                             : `Login added for ${f.name}. Tell them the password in person.`);
           onSaved();
         } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
@@ -92,7 +93,7 @@ function MemberSheet({ m, self, onClose, onSaved }: { m: Partial<TeamMember>; se
           <p className="mt-1.5 text-[12px] text-fg-2">{ROLE_INFO[f.role].what}</p>
         </fieldset>
         {isNew ? (
-          <Field label="First password" hint="At least 8 characters. Tell them in person; they can change it later. If they already have a DineOS login, they keep their own."><Input type="text" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
+          <Field label="First password" hint={`At least 8 characters. Tell them in person; they can change it later. If they already have a ${BRAND.name} login, they keep their own.`}><Input type="text" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
         ) : (
           <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
             <span><span className="block text-sm font-semibold text-fg">Can sign in</span><span className="text-[12px] text-fg-2">Switch off when someone leaves or is on leave.</span></span>

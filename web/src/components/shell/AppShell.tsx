@@ -13,6 +13,7 @@ import { useOutbox } from "@/lib/outbox";
 import { Tour } from "./Tour";
 import { useAlerts, useAlertSettings, useWakeLock } from "@/lib/alerts";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 export { NAV, HOME, type Route } from "@/lib/routes";
 export const CALL_LABEL = { waiter: "called a waiter", water: "asked for water", bill: "asked for the bill", help: "needs help" } as const;
@@ -145,7 +146,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
       {stale && (
         <div className="flex items-center gap-3 bg-ink px-4 py-2 text-[13px] text-surface lg:px-8">
           <RefreshCw className="size-4 shrink-0" aria-hidden />
-          <span className="flex-1">A new version of DineOS is ready. Open bills are saved and won&apos;t be lost.</span>
+          <span className="flex-1">A new version of {BRAND.name} is ready. Open bills are saved and won&apos;t be lost.</span>
           <button className="font-bold underline underline-offset-2" onClick={() => location.reload()}>Refresh now</button>
         </div>
       )}
@@ -250,7 +251,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
           {alerts.perm !== "unsupported" && (
             <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
               <span><span className="block text-sm font-semibold text-fg">Notifications</span>
-                <span className="text-[12px] text-fg-2">{alerts.perm === "granted" ? "On. You'll get one while DineOS is open in the background." : alerts.perm === "denied" ? "Blocked in this browser's site settings." : "Show a notification while DineOS is in the background."}</span></span>
+                <span className="text-[12px] text-fg-2">{alerts.perm === "granted" ? `On. You'll get one while ${BRAND.name} is open in the background.` : alerts.perm === "denied" ? "Blocked in this browser's site settings." : `Show a notification while ${BRAND.name} is in the background.`}</span></span>
               {alerts.perm === "default" && <Button size="sm" onClick={alerts.askNotify}>Turn on</Button>}
             </div>
           )}

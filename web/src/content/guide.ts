@@ -3,15 +3,17 @@
    Write for restaurant staff: short steps, button names exactly as on screen, no technical words.
    GUIDE is a Record over every Route, so a screen without a Help section doesn't build. */
 import type { Route } from "@/lib/routes";
+import { BRAND } from "@/lib/brand";
 
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "11 Nov 2026", text: `The app is now called ${BRAND.name} (a working name until the final name is picked). Everything works as before.` },
   { date: "11 Nov 2026", text: "GST bills: every paid bill gets a bill number (like CP2627-0001, starting again each 1 April). Print it on the receipt printer or share it. Add your GSTIN and FSSAI number in Settings → Bills." },
   { date: "11 Nov 2026", text: "New role: Cashier. Opens on the POS; takes orders, takeaway and payments and prints bills, but can't give discounts or clear tables." },
   { date: "11 Nov 2026", text: "No internet? Orders sent from the POS are kept on the device and go to the kitchen by themselves when the connection is back." },
   { date: "11 Nov 2026", text: "Alerts: a chime (and a notification if you turn it on) for new orders in the kitchen, and for calls and food ready to serve on the floor. Turn them on or off from the bell." },
-  { date: "11 Nov 2026", text: "Someone who already has a DineOS login (for example at another restaurant) can now be added to your team from Team → Add login." },
+  { date: "11 Nov 2026", text: `Someone who already has a ${BRAND.name} login (for example at another restaurant) can now be added to your team from Team → Add login.` },
   { date: "11 Nov 2026", text: "A short tour shows the first time you open each screen. Help → Show the tours again brings them back." },
   { date: "11 Nov 2026", text: "Takeaway: tap Takeaway in the POS for an order without a table. It gets a token number (1, 2, 3… from the start of each day)." },
   { date: "11 Nov 2026", text: "Discounts: owners and managers can take a percent or an amount off a bill, with a reason. Managers have a limit the owner sets in Settings." },
@@ -20,9 +22,9 @@ export const WHATS_NEW: { date: string; text: string }[] = [
   { date: "11 Nov 2026", text: "Close the day on Today: count the cash drawer, see what was expected, and lock the day's sales." },
   { date: "11 Nov 2026", text: "Team notice: post a short message on Today and everyone sees it at the top of their screen." },
   { date: "11 Nov 2026", text: "Opening a link to a screen your role can't use now takes you to your home screen, and the address bar shows where you are." },
-  { date: "11 Nov 2026", text: "New screens: Menu, Tables & QR, Team, Settings, Bills and this Help guide. Everything a restaurant needs to run on DineOS on its own." },
+  { date: "11 Nov 2026", text: `New screens: Menu, Tables & QR, Team, Settings, Bills and this Help guide. Everything a restaurant needs to run on ${BRAND.name} on its own.` },
   { date: "11 Nov 2026", text: "Forgot your password? The link in the email now opens a page to set a new one." },
-  { date: "11 Nov 2026", text: "DineOS is live: Today, POS, Floor, Kitchen and the guest QR page work on real data." },
+  { date: "11 Nov 2026", text: `${BRAND.name} is live: Today, POS, Floor, Kitchen and the guest QR page work on real data.` },
 ];
 
 export const GUIDE: Record<Route, Section> = {
@@ -121,7 +123,7 @@ export const GUIDE: Record<Route, Section> = {
     steps: [
       "Tap Add login, enter their name, email, role and a first password. Tell them the password in person.",
       "Roles: Owner (everything), Manager (everything except Team and Settings), Cashier (POS, takeaway, payments, bills; opens on the POS), Waiter (floor, POS, bills), Kitchen (kitchen screen and sold-out switches). Only owners and managers give discounts or clear tables.",
-      "If the person already has a DineOS login (for example at another restaurant), Add login puts them on your team and they keep their own password.",
+      `If the person already has a ${BRAND.name} login (for example at another restaurant), Add login puts them on your team and they keep their own password.`,
       "Switch someone off when they leave or are on leave. They can't sign in until you switch them on.",
       "Set password gives someone a new password if they've forgotten theirs.",
     ],
@@ -147,7 +149,7 @@ export const GUIDE: Record<Route, Section> = {
       "The bell (top right) shows calls from tables. At the bottom of it you can turn the alert sound and notifications on or off for this device."],
   },
   design: {
-    title: "Design system", who: "For the DineOS team",
+    title: "Design system", who: `For the ${BRAND.name} team`,
     intro: "Colours and building blocks used on every screen.",
     steps: ["Switch between light and dark with the moon / sun button to compare."],
   },

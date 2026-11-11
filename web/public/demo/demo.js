@@ -558,3 +558,5 @@ const Demo = (() => {
     TEAM
   };
 })();
+
+window.Demo = Demo;

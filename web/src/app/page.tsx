@@ -17,6 +17,7 @@ import { NewPassword, NoRestaurant, SignIn } from "@/screens/SignIn";
 import { TablesScreen } from "@/screens/Tables";
 import { TeamScreen } from "@/screens/Team";
 import { TodayScreen } from "@/screens/Today";
+import { BRAND } from "@/lib/brand";
 
 /* Staff app: one page with hash routes (#/today, #/pos?table=…, #/menu …), so it works as
    plain files on any host. The guest page is t.html?k=<token>. */
@@ -76,7 +77,7 @@ function Staff() {
     team: { title: "Team", sub: "Who can sign in, and what they can do.", el: <TeamScreen /> },
     settings: { title: "Settings", sub: "Restaurant details, bill, payments and the guest page.", el: <SettingsScreen /> },
     help: { title: "Help", sub: "How each screen works, in plain words.", el: <HelpScreen focus={loc.params.get("topic")} /> },
-    design: { title: "Design system", sub: "DineOS colours and components.", el: <DesignScreen /> },
+    design: { title: "Design system", sub: `${BRAND.name} colours and components.`, el: <DesignScreen /> },
   };
   const p = page[route];
 

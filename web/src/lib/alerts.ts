@@ -5,6 +5,7 @@
    on their own device. Nothing about guests is sent anywhere. */
 import * as React from "react";
 import type { Live, Role } from "./types";
+import { BRAND } from "@/lib/brand";
 
 const SOUND = "dineos.sound";
 const readSound = () => { try { return localStorage.getItem(SOUND) !== "off"; } catch { return true; } };
@@ -45,7 +46,7 @@ function eventsFor(live: Live, role: Role, kitchenScreen: boolean): Event[] {
   }
   if (!kitchen) for (const c of live.calls) {
     const what = { waiter: "called a waiter", water: "asked for water", bill: "asked for the bill", help: "needs help" }[c.kind];
-    out.push({ key: `c:${c.id}`, kind: "call", title: `${name(c.table_id, null)} ${what}`, body: "Tap to open DineOS" });
+    out.push({ key: `c:${c.id}`, kind: "call", title: `${name(c.table_id, null)} ${what}`, body: `Tap to open ${BRAND.name}` });
   }
   return out;
 }

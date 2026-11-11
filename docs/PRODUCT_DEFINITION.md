@@ -1,7 +1,7 @@
-# DineOS: product definition (v1)
+# Product definition (v1). Working name: Dinedot (was DineOS)
 
 Status: **prototype approved 11 Nov 2026; Phase 3 database (0004) done; Phase 4 screens on live data done (sign-in, restaurant setup, Today, POS, Floor, Kitchen, guest page); Phase 5a admin screens done (Menu, Tables & QR, Team, Settings, Bills, Help, password reset). Live at dineos.littlegasp-orders.workers.dev on its own Supabase project. 0005 (discounts, takeaway tokens, split payments, kitchen stations and dish ticks, close the day, team notice) live 11 Nov 2026. 0006 (GST bills with invoice numbers, cashier role) plus offline orders, alerts, tour, existing-login invites and encrypted backups written and tested on branch `dineos-0006`. Name clash: another Indian restaurant POS is called DineOS (dineos.co.in), so a rename is needed before launch.** Branch `dineos`. Nothing here is live yet;
-the current Dinedot app on `main` keeps running unchanged until DineOS replaces it.
+the old static Dinedot app was retired on 11 Nov 2026 (files removed, its GitHub Pages site unpublished); `dineos` is now the default branch.
 
 ## Decisions (agreed 11 Nov 2026)
 
@@ -9,7 +9,7 @@ the current Dinedot app on `main` keeps running unchanged until DineOS replaces 
 |---|---|
 | Shape | One system, many restaurants (multi-tenant). Each restaurant is a row, not a copy of the repo. |
 | Stack | Next.js 15 + TypeScript + Tailwind 4 (same as Studio CRM), static export on Cloudflare. Supabase (Mumbai) stays; money and permissions stay in SQL functions. |
-| Name | DineOS is taken by another Indian restaurant POS (dineos.co.in): rename needed before launch. |
+| Name | Working name **Dinedot** (11 Nov 2026). DineOS was dropped: another Indian restaurant POS uses it (dineos.co.in). Final name after trademark and domain research; it changes in `web/src/lib/brand.ts` only. |
 | v1 scope | Core ops + POS: guest QR ordering, waiter floor, kitchen stations, POS billing with discounts, split payments, takeaway, daily close. |
 
 ## Who uses it

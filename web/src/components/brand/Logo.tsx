@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 /**
- * DineOS mark: an original geometric "D" — a straight stem and a half-ring drawn as one
+ * Logo mark: an original geometric "D" — a straight stem and a half-ring drawn as one
  * continuous stroke, with a coral dot inside (a plate seen from above / a live order).
  */
 export function LogoMark({ size = 32, className }: { size?: number; className?: string }) {
@@ -20,7 +21,7 @@ export function Logo({ className, compact = false }: { className?: string; compa
       <LogoMark />
       {!compact && (
         <span className="font-display text-[19px] font-extrabold tracking-tight text-fg">
-          Dine<span className="text-coral-strong">OS</span>
+          {BRAND.head}<span className="text-coral-strong">{BRAND.tail}</span>
         </span>
       )}
     </span>

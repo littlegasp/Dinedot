@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ===================================================================================
-   DineOS design tokens (brief §7). Light is the default; dark is a full, tested theme.
+   Design tokens (brief §7). Light is the default; dark is a full, tested theme.
    Every colour in the app comes from these variables — never a raw hex in a component.
    =================================================================================== */
 :root {

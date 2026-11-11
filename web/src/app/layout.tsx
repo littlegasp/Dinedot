@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/inter";
 import "./globals.css";
+import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "DineOS",
+  title: BRAND.name,
   description: "Restaurant operating system: QR ordering, POS, kitchen and floor in one place.",
 };
 export const viewport: Viewport = { themeColor: "#171b24", width: "device-width", initialScale: 1 };

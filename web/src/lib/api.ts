@@ -21,7 +21,7 @@ export const isDemo = () =>
 const read = <T,>(k: string): T | null => { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : null; } catch { return null; } };
 const write = (k: string, v: unknown) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-/* ---------- demo backend (shared demo.js, copied into public/legacy at build) ---------- */
+/* ---------- demo backend (public/demo/shim.js + demo.js, loaded only in demo mode) ---------- */
 let demoReady: Promise<DemoApi> | null = null;
 function loadScript(src: string) {
   return new Promise<void>((ok, bad) => {
@@ -31,7 +31,7 @@ function loadScript(src: string) {
 }
 export function demo(): Promise<DemoApi> {
   if (!demoReady) demoReady = (async () => {
-    if (!window.Demo) { await loadScript("legacy/shim.js"); await loadScript("legacy/demo.js"); }
+    if (!window.Demo) { await loadScript("demo/shim.js"); await loadScript("demo/demo.js"); }
     return window.Demo!;
   })();
   return demoReady;

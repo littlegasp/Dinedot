@@ -1,6 +1,7 @@
 name: Tests
-# Runs on every push and pull request: database tests (incl. the two-guests race) and the
-# browser end-to-end journey in demo mode. A red cross on a commit means: don't publish it.
+# Runs on every push and pull request: database tests (incl. the two-guests race) and the app
+# (type check, lint, the demo journey and the app against the real migrations).
+# A red cross on a commit means: don't publish it.
 on:
   push:
   pull_request:
@@ -21,23 +22,9 @@ jobs:
       - name: Database tests
         run: bash supabase/test/run.sh
 
-  browser:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: 22 }
-      - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - name: End-to-end journey (demo mode)
-        run: |
-          python3 -m http.server 8765 >/dev/null 2>&1 &
-          sleep 2
-          node tests/e2e/flow.mjs
-
-  dineos:
-    # The new DineOS app (web/): type check, lint, build, the demo journey at phone and
-    # desktop width, and the same app against the real migrations through PostgREST.
+  app:
+    # The app (web/): type check, lint, build, the demo journey at phone and desktop width,
+    # and the same app against the real migrations through PostgREST.
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -51,9 +38,9 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: 22 }
-      - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
       - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
         working-directory: web
       - run: npx tsc --noEmit && npx eslint src
         working-directory: web

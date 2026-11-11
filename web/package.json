@@ -1,5 +1,5 @@
 {
-  "name": "dineos-web",
+  "name": "dinedot-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,8 +7,6 @@
     "build": "next build",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "predev": "node scripts/copy-demo.mjs",
-    "prebuild": "node scripts/copy-demo.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "engines": {
@@ -40,6 +38,7 @@
     "@types/react-dom": "^19.1.9",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.27",
+    "playwright": "1.63.0",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.3",
     "wrangler": "^4.151.0"

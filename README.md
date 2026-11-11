@@ -1,28 +1,33 @@
-# Dinedot — QR table ordering
+# Dinedot (working name): restaurant QR ordering, POS and kitchen
 
-One QR on every table. Guests order, call a waiter and pay from their phone; staff run the kitchen, floor and bills from one app.
+One QR on every table. Guests order, call a waiter and pay from their phone. Staff run the POS,
+kitchen, floor, bills and the day's close from one app. The name is a working name: it is set in
+`web/src/lib/brand.ts` and changes there when the final name is picked.
 
-**Try it now:** open `index.html`. With no Supabase keys in `config.js` it runs as a demo in your browser.
-
-| Page | What it is |
+| Folder | What it is |
 |---|---|
-| `t.html?k=<token>` | Guest page: menu, dish details, order, live status, Wi-Fi, call waiter, bill (split, tip, UPI), rating |
-| `staff.html` | Staff app: Dashboard, Floor, Kitchen, Bills, Menu, Tables & QR, Settings, Help |
-| `index.html` | Product page with demo links |
+| `web/` | The app (Next.js, static export). `index.html` = staff app, `t.html?k=<token>` = guest page (the QR codes point here) |
+| `supabase/migrations/` | The database: tables, security and every function, run in order |
+| `supabase/functions/team-admin/` | Lets the owner add and manage logins (needs the service key, so it runs on Supabase) |
+| `supabase/test/` | Database tests |
+| `docs/` | Product definition, backups, decisions |
 
-## Setting up a restaurant (once per restaurant)
+**Try it:** with no Supabase keys the app runs as a demo restaurant in the browser: `cd web && npm ci && npm run dev`.
+
+## Setting up (once)
 1. **Supabase** → new project, region **Mumbai**.
-2. **SQL Editor** → run every file in `supabase/migrations/` in order (`0001_init.sql`, `0002_cover_photo.sql`, `0003_hardening.sql`, `0004_restaurants.sql`). After 0004, redeploy the `team-admin` function from this repo. Optional: run `supabase/sample_menu.sql` for a sample menu and six tables.
-3. **Authentication → Users → Add user** with the owner's email and a password, tick **Auto Confirm User**. The first login becomes the owner.
-4. **Authentication → Sign In / Providers** → turn off **Allow new users to sign up**.
-5. **Authentication → URL Configuration** → Site URL = the site address; add `<site>/staff.html` to Redirect URLs (for "Forgot password?").
-6. **Edge Functions → Deploy a new function → Via editor**, name `team-admin`, paste `supabase/functions/team-admin/index.ts`, Deploy. (Lets the owner add and manage logins from Settings → Team.)
-7. Put the Project URL and **publishable** key in `config.js`. Never the secret key or database password.
-8. Publish (GitHub Pages from `main`, or any static host). Sign in to `staff.html`, fill **Settings**, build the **Menu**, add **Tables**, then **Print QR codes**.
+2. **SQL Editor** → run every file in `supabase/migrations/` in order (0001 … 0006). Optional: `supabase/sample_menu.sql` for a sample menu and tables.
+3. **Authentication → Users → Add user** with the owner's email and a password, tick **Auto Confirm User**. The first login becomes the owner. Then **Sign In / Providers** → turn off **Allow new users to sign up**.
+4. **Authentication → URL Configuration** → Site URL = the app's address.
+5. **Edge Functions → Deploy a new function → Via editor**, name `team-admin`, paste `supabase/functions/team-admin/index.ts`, Deploy, then turn **Verify JWT** off (the function checks the owner itself).
+6. **Cloudflare → Workers & Pages → Import repository**: root `web`, build `npm run build`, deploy `npx wrangler deploy`, build variables `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_KEY` (the **publishable** key only; never the secret key or database password).
+7. Sign in, fill **Settings** (including **Bills**: GSTIN, FSSAI), build the **Menu**, add **Tables**, **Print QR codes**.
+8. Backups: add the two GitHub secrets in `docs/BACKUPS.md`.
 
 ## Tests
 ```
-PGHOST=… PGPORT=… PGUSER=postgres supabase/test/run.sh     # database: ALL / 0003 / 0004 / RACE TESTS PASSED
-python3 -m http.server 8765 & node tests/e2e/flow.mjs    # browser journey: E2E PASSED
+PGHOST=… PGUSER=postgres supabase/test/run.sh             # database: ALL / 0003 … 0006 / RACE TESTS PASSED
+cd web && npm run build && (cd out && python3 -m http.server 8792 &) && node tests/journey.mjs   # DINEOS JOURNEY PASSED
+POSTGREST=/path/to/postgrest bash web/tests/real/run.sh   # the app against the real migrations: REAL STACK PASSED
 ```
-Both also run automatically on GitHub for every push (Actions → Tests).
+All of them run on GitHub for every push (Actions → Tests).
