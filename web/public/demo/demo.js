@@ -11,7 +11,8 @@ const Demo = (() => {
   const ago = s => new Date(Date.now() - s * 1000).toISOString();
   const err = m => { const e = new Error(m); throw e; };
   const clone = o => JSON.parse(JSON.stringify(o));
-  const dayKey = d => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
+  // days are counted in India time, like the database (a browser elsewhere still agrees with the Bills dates)
+  const dayKey = d => new Date(new Date(d).getTime() + 330 * 60000).toISOString().slice(0, 10);
 
   const TEAM = [
     { id: "u-owner", name: "Meera", email: "owner@demo", role: "owner" },
