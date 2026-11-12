@@ -7,6 +7,7 @@ import { Badge, Card, CardHeader, EmptyState, Skeleton } from "@/components/ui/p
 import { toast } from "@/components/ui/overlay";
 import { TABLE_STATE, tableState, visitLabel, visitOf } from "@/components/ui/status";
 import { CloseDayCard, NoticeCard } from "./DayClose";
+import { CountUp } from "@/components/ui/CountUp";
 import { CALL_ICON, CALL_LABEL } from "@/components/shell/AppShell";
 import { rpc } from "@/lib/api";
 import { minutesSince, useAction, useStaff } from "@/lib/staff";
@@ -39,10 +40,10 @@ export function TodayScreen({ go }: { go: (hash: string) => void }) {
   // compare with last week only once today has a closed bill (a 0 early in the day isn't "down 100%")
   const delta = (now: number, before?: number) => (before && t.bills > 0 ? Math.round(((now - before) / before) * 1000) / 10 : null);
   const KPIS = [
-    { label: "Sales today", value: inr(t.sales), d: delta(t.sales, last?.sales), Icon: Wallet },
-    { label: "Bills closed", value: String(t.bills), d: delta(t.bills, last?.bills), Icon: Receipt },
-    { label: "Average bill", value: inr(avg), d: delta(avg, last && last.bills ? last.sales / last.bills : undefined), Icon: Users },
-    { label: "Guest rating", value: t.rating ? String(t.rating) : "–", d: null, note: rep ? `${rep.today.ratings} rating${rep.today.ratings === 1 ? "" : "s"} today` : "", Icon: Star },
+    { label: "Sales today", n: t.sales, f: (x: number) => inr(Math.round(x)), d: delta(t.sales, last?.sales), Icon: Wallet },
+    { label: "Bills closed", n: t.bills, f: (x: number) => String(Math.round(x)), d: delta(t.bills, last?.bills), Icon: Receipt },
+    { label: "Average bill", n: avg, f: (x: number) => inr(Math.round(x)), d: delta(avg, last && last.bills ? last.sales / last.bills : undefined), Icon: Users },
+    { label: "Guest rating", n: t.rating ?? 0, f: (x: number) => (t.rating ? x.toFixed(1) : "–"), d: null, note: rep ? `${rep.today.ratings} rating${rep.today.ratings === 1 ? "" : "s"} today` : "", Icon: Star },
   ];
   const hours = Array.from({ length: 24 }, (_, h) => ({ h, n: t.flow[String(h)] ?? 0 })).filter((x, _, a) => {
     const used = a.filter(y => y.n).map(y => y.h); return used.length ? x.h >= Math.min(...used, 11) && x.h <= Math.max(...used, 22) : x.h >= 11 && x.h <= 23;
@@ -72,10 +73,10 @@ export function TodayScreen({ go }: { go: (hash: string) => void }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <div className="grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-4">
-        {KPIS.map(k => (
-          <Card key={k.label} className="p-4 lg:p-5">
+        {KPIS.map((k, i) => (
+          <Card key={k.label} className="rise p-4 lg:p-5" style={{ animationDelay: `${i * 60}ms` }}>
             <div className="flex items-center gap-2 text-[13px] font-semibold text-fg-2"><k.Icon className="size-4" aria-hidden />{k.label}</div>
-            <p className="num mt-2 font-display text-[26px] font-extrabold leading-none text-fg lg:text-[30px]">{k.value}</p>
+            <p className="num mt-2 font-display text-[26px] font-extrabold leading-none text-fg lg:text-[30px]"><CountUp value={k.n} format={k.f} /></p>
             <p className="mt-2 flex min-h-4 items-center gap-1 text-[12px] font-semibold">
               {k.d != null ? <span className={cn("flex items-center gap-1", k.d >= 0 ? "text-success" : "text-danger")}>
                 {k.d >= 0 ? <ArrowUpRight className="size-3.5" aria-hidden /> : <ArrowDownRight className="size-3.5" aria-hidden />}{k.d >= 0 ? "Up" : "Down"} {Math.abs(k.d)}%

@@ -1,14 +1,15 @@
 "use client";
 import * as React from "react";
 import qrcode from "qrcode-generator";
-import { Plus, Printer, QrCode, RefreshCw, Trash2, Users } from "lucide-react";
+import { LayoutGrid, Map as MapIcon, Move, Plus, Printer, QrCode, RefreshCw, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge, Card, EmptyState, Field, Input, Skeleton, Switch } from "@/components/ui/primitives";
+import { Badge, Card, EmptyState, Field, Input, Segmented, Skeleton, Switch } from "@/components/ui/primitives";
+import { FloorPlan, spotOf, type Spot } from "@/components/FloorPlan";
 import { Sheet, toast } from "@/components/ui/overlay";
 import { LogoMark } from "@/components/brand/Logo";
 import { rpc } from "@/lib/api";
 import { useAction, useStaff } from "@/lib/staff";
-import type { LiveTable } from "@/lib/types";
+import type { LiveTable, TableShape } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** The address a table's QR code opens: this site's t.html (same as the printed codes of the old app). */
@@ -21,8 +22,25 @@ function Qr({ text, className, decorative }: { text: string; className?: string;
     : <div className={cn("bg-white [&_svg]:size-full", className)} role="img" aria-label="QR code" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+/** Plan or cards: remembered on this device (Tables and Floor share it). */
+export function usePlanView(): ["plan" | "cards", (v: "plan" | "cards") => void] {
+  const [v, setV] = React.useState<"plan" | "cards">("plan");
+  React.useEffect(() => { try { if (localStorage.getItem("dineos.view") === "cards") setV("cards"); } catch {} }, []);
+  return [v, (n) => { setV(n); try { localStorage.setItem("dineos.view", n); } catch {} }];
+}
+export const VIEW_OPTIONS = [
+  { value: "plan" as const, label: <span className="flex items-center gap-1.5"><MapIcon className="size-4" aria-hidden />Plan</span> },
+  { value: "cards" as const, label: <span className="flex items-center gap-1.5"><LayoutGrid className="size-4" aria-hidden />Cards</span> },
+];
+
 export function TablesScreen() {
   const { live, reload } = useStaff();
+  const { run, pending } = useAction();
+  const [view, setView] = usePlanView();
+  const [area, setArea] = React.useState("");
+  const [arranging, setArranging] = React.useState(false);
+  const [spots, setSpots] = React.useState<Record<string, Spot>>({});
+  const [picked, setPicked] = React.useState<string | null>(null);
   const [tokens, setTokens] = React.useState<Record<string, string> | null>(null);
   const [edit, setEdit] = React.useState<Partial<LiveTable> | null>(null);
   const [printing, setPrinting] = React.useState<LiveTable[] | null>(null);
@@ -39,15 +57,39 @@ export function TablesScreen() {
   if (!live || !tokens) return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-40" />)}</div>;
   const tables = live.tables;
   const areas = [...new Set(tables.map(t => t.area))];
+  const room = areas.includes(area) ? area : areas[0] ?? "";
+  const inRoom = tables.filter(t => t.area === room);
+  const startArrange = () => { setSpots(Object.fromEntries(inRoom.map((t, i) => [t.id, spotOf(t, i)]))); setPicked(null); setArranging(true); };
+  const saveLayout = async () => {
+    const ok = await run(() => rpc("owner_save_plan", { p: inRoom.map(t => ({ id: t.id, ...spots[t.id] })) }).then(() => true), "Layout saved");
+    if (ok) { setArranging(false); reload(); }
+  };
 
   return (
-    <div className="grid gap-5">
-      <div className="flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => setEdit({ code: "", area: areas[0] ?? "Main", seats: 4, active: true })}><Plus />Add table</Button>
-        <Button disabled={!tables.some(t => t.active)} onClick={() => setPrinting(tables.filter(t => t.active))}><Printer />Print QR codes</Button>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+      <div className="flex flex-wrap items-center gap-2">
+        {arranging ? (<>
+          <Button variant="primary" disabled={pending} onClick={saveLayout}>Save layout</Button>
+          <Button onClick={() => setArranging(false)}>Cancel</Button>
+          <p className="basis-full text-[13px] text-fg-2 sm:basis-auto">Drag each table to where it stands. On a keyboard, pick a table and use the arrow keys.</p>
+        </>) : (<>
+          <Button variant="primary" onClick={() => setEdit({ code: "", area: room || "Main", seats: 4, active: true, shape: "square" })}><Plus />Add table</Button>
+          <Button disabled={!tables.some(t => t.active)} onClick={() => setPrinting(tables.filter(t => t.active))}><Printer />Print QR codes</Button>
+          {tables.length > 0 && view === "plan" && <Button onClick={startArrange}><Move />Arrange tables</Button>}
+          {tables.length > 0 && <Segmented className="ml-auto" value={view} onChange={setView} options={VIEW_OPTIONS} />}
+        </>)}
       </div>
 
-      {tables.length === 0 ? (
+      {tables.length > 0 && view === "plan" ? (
+        <section aria-label="Floor plan" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+          {areas.length > 1 && <Segmented value={room} onChange={a => { if (!arranging) setArea(a); }} options={areas.map(a => ({ value: a, label: a }))} className="w-fit max-w-full overflow-x-auto" />}
+          <FloorPlan area={room} tables={inRoom} edit={arranging} spots={arranging ? spots : undefined} selected={arranging ? picked : null}
+            onMove={(id, s) => { setPicked(id); setSpots(m => ({ ...m, [id]: s })); }}
+            onOpen={t => arranging ? setPicked(t.id) : setEdit(t)}
+            info={t => t.active ? { state: "free", word: `${t.seats} seats` } : { state: "off", word: "Off" }} />
+          {!arranging && <p className="text-[12px] text-fg-2">Tap a table to change it or print its QR code. To move tables, choose Arrange tables.</p>}
+        </section>
+      ) : tables.length === 0 ? (
         <Card><EmptyState icon={<QrCode />} title="No tables yet" body="Add your tables, then print a QR card for each one."
           action={<Button variant="primary" onClick={() => setEdit({ code: "T1", area: "Main", seats: 4, active: true })}><Plus />Add table</Button>} /></Card>
       ) : areas.map(a => (
@@ -67,7 +109,7 @@ export function TablesScreen() {
 
       {edit && <TableSheet t={edit} token={edit.id ? tokens[edit.id] : undefined} areas={areas}
         onClose={() => setEdit(null)} onPrint={t => { setEdit(null); setPrinting([t]); }}
-        onSaved={() => { setEdit(null); reload(); loadTokens(); }} onToken={loadTokens} />}
+        onSaved={a => { setEdit(null); if (a) setArea(a); reload(); loadTokens(); }} onToken={loadTokens} />}
 
       {/* Print sheet: only this shows on paper (see globals.css @media print) */}
       {printing && (
@@ -87,11 +129,11 @@ export function TablesScreen() {
 }
 
 function TableSheet({ t, token, areas, onClose, onSaved, onToken, onPrint }: { t: Partial<LiveTable>; token?: string; areas: string[];
-  onClose: () => void; onSaved: () => void; onToken: () => void; onPrint: (t: LiveTable) => void }) {
+  onClose: () => void; onSaved: (area?: string) => void; onToken: () => void; onPrint: (t: LiveTable) => void }) {
   const { run, pending } = useAction();
-  const [f, setF] = React.useState({ code: t.code ?? "", name: t.name ?? "", area: t.area ?? "Main", seats: t.seats ?? 4, active: t.active ?? true });
+  const [f, setF] = React.useState({ code: t.code ?? "", name: t.name ?? "", area: t.area ?? "Main", seats: t.seats ?? 4, active: t.active ?? true, shape: (t.shape ?? "square") as TableShape });
   const [confirm, setConfirm] = React.useState<"" | "qr" | "del">("");
-  const save = async () => { const ok = await run(() => rpc("owner_save_table", { p: { id: t.id ?? "", ...f } }).then(() => true), "Table saved"); if (ok) onSaved(); };
+  const save = async () => { const ok = await run(() => rpc("owner_save_table", { p: { id: t.id ?? "", ...f } }).then(() => true), "Table saved"); if (ok) onSaved(f.area.trim() || "Main"); };
 
   return (
     <Sheet open onOpenChange={o => !o && onClose()} title={t.id ? `Table ${t.code}` : "Add table"} description="Each table has its own QR code.">
@@ -112,6 +154,12 @@ function TableSheet({ t, token, areas, onClose, onSaved, onToken, onPrint }: { t
         <Field label="Area" hint="e.g. Main, Terrace, Family room">
           <Input value={f.area} list="areas" maxLength={30} onChange={e => setF({ ...f, area: e.target.value })} />
         </Field>
+        <div className="grid gap-1.5" role="group" aria-labelledby="shape-label">
+          <span id="shape-label" className="text-[13px] font-semibold text-fg">Shape</span>
+          <Segmented value={f.shape} onChange={v => setF({ ...f, shape: v })} className="w-fit"
+            options={[{ value: "square", label: "Square" }, { value: "round", label: "Round" }, { value: "long", label: "Long" }]} />
+          <span className="text-[12px] text-fg-2">How it&apos;s drawn on the floor plan.</span>
+        </div>
         <datalist id="areas">{areas.map(a => <option key={a} value={a} />)}</datalist>
         <Field label="Name (optional)" hint="Shown to guests instead of the number, e.g. Window booth"><Input value={f.name} maxLength={40} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
         <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">

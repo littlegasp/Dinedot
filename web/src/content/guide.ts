@@ -8,6 +8,11 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Floor plan: Tables & QR and Floor now show each room drawn from above, with every table in its place and its chairs. On Floor each table shows its colour and word (Free, Ordered, Eating, Bill asked) and a table that's calling pulses. Managers place tables with Arrange tables. Plan / Cards switches back to the old view." },
+  { date: "13 Nov 2026", text: `Use ${BRAND.name} like a phone app: install it from More → Install app (Android) or Share → Add to Home Screen (iPhone). It opens full screen with its own icon.` },
+  { date: "13 Nov 2026", text: "Phone alerts: turn them on from the bell and your phone buzzes even when the app is closed. The kitchen gets new orders; waiters and cashiers get calls from tables and food that's ready." },
+  { date: "13 Nov 2026", text: "A new phone menu at the bottom with a big + for the POS in the middle. Day / Night now changes with a smooth wipe from the button. Taps give a small buzz (switch it off in More → Vibrate on taps)." },
+  { date: "13 Nov 2026", text: "Kitchen on a phone or tablet: swipe an order to the right to move it to the next step. Sheets close by pulling them down." },
   { date: "11 Nov 2026", text: `The app is now called ${BRAND.name} (a working name until the final name is picked). Everything works as before.` },
   { date: "11 Nov 2026", text: "GST bills: every paid bill gets a bill number (like CP2627-0001, starting again each 1 April). Print it on the receipt printer or share it. Add your GSTIN and FSSAI number in Settings → Bills." },
   { date: "11 Nov 2026", text: "New role: Cashier. Opens on the POS; takes orders, takeaway and payments and prints bills, but can't give discounts or clear tables." },
@@ -65,6 +70,7 @@ export const GUIDE: Record<Route, Section> = {
     intro: "Every table at a glance, with calls from guests at the top.",
     steps: [
       "Calls from tables (waiter, water, bill) show at the top. Tap Done once you've gone to the table.",
+      "Plan shows each room drawn from above: every table in its place, coloured by what's happening (Free, Ordered, Eating, Bill asked) with how long it's been open. A table that's calling pulses. Cards shows the tables as a list of cards instead; your choice is kept on this device.",
       "Tap a table to see its orders. Tap Served when the food reaches the table.",
       "Add items opens the POS for that table. Bill & pay goes straight to payment.",
       "Managers can clear a table without payment (for a walk-out or a test). Write the reason; it's saved in the activity history.",
@@ -82,6 +88,7 @@ export const GUIDE: Record<Route, Section> = {
       "An order turns amber as it gets close to 15 minutes and red with the word late after that.",
       "Notes from the guest or waiter (less spicy, allergies) show in a yellow box.",
       "Tapped the wrong button? The arrow button moves the order back one step.",
+      "On a phone or tablet you can also swipe an order to the right to move it to the next step.",
     ],
   },
   bills: {
@@ -111,7 +118,10 @@ export const GUIDE: Record<Route, Section> = {
     title: "Tables & QR", who: "Owner and manager",
     intro: "Your tables and the QR code stuck on each one.",
     steps: [
-      "Tap Add table, give it a number (T1, P2…), the area and seats.",
+      "Tap Add table, give it a number (T1, P2…), the area, seats and shape (Square, Round or Long).",
+      "Plan shows each area as a room with your tables in it. Tap a table to change it or print its QR code. Cards shows the QR cards instead.",
+      "To match the plan to your restaurant, tap Arrange tables, drag each table to where it stands, then tap Save layout. Cancel leaves the plan as it was. Each area (Main, Terrace…) is arranged on its own.",
+      "Moving a table to another area puts it at a starting spot there; arrange it again.",
       "Print QR codes prints one card per table. Stick each card on its table.",
       "If a QR card is lost or copied, open the table and tap Replace QR. The old code stops working at once; print the new one.",
       "Switch a table off to hide it for a while. A table with bills on record can't be deleted, only switched off.",
@@ -146,7 +156,11 @@ export const GUIDE: Record<Route, Section> = {
     intro: "This guide. It's updated every time a screen changes.",
     steps: ["Pick a screen on the left (or above on a phone) to read how it works.", "What's new lists recent changes, newest first.",
       "Show the tours again brings back the short tour on each screen.",
-      "The bell (top right) shows calls from tables. At the bottom of it you can turn the alert sound and notifications on or off for this device."],
+      "The bell (top right) shows calls from tables. At the bottom of it you can turn the alert sound and notifications on or off for this device.",
+      "Phone alerts (in the bell): tap Turn on phone alerts and allow notifications. Your phone then buzzes even when the app is closed: the kitchen for new orders, waiters and cashiers for calls and food that's ready, managers for calls. On an iPhone, add the app to the Home Screen first.",
+      "Install as an app: on Android tap More → Install app (or Install app at the bottom of the menu on a computer). On an iPhone open the app in Safari, tap Share, then Add to Home Screen.",
+      "On a phone the menu is at the bottom. The big + in the middle opens the POS. More has Day / Night, Vibrate on taps, Install app and Sign out.",
+      "Sheets that slide up from the bottom close when you pull them down."],
   },
   design: {
     title: "Design system", who: `For the ${BRAND.name} team`,

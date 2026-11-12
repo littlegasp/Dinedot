@@ -10,6 +10,7 @@ import { useAction, useStaff } from "@/lib/staff";
 import type { Bill, CartLine, LiveVisit, MenuItem, PayPart, StaffMenu } from "@/lib/types";
 import { cn, inr } from "@/lib/utils";
 import { ReceiptDialog } from "./ReceiptDialog";
+import { celebrate } from "@/lib/motion";
 import { enqueue, isOffline, useOutbox } from "@/lib/outbox";
 
 export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | null; setTableId: (id: string) => void; payNow: boolean }) {
@@ -366,7 +367,7 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open
       {kitchen && <p className="mt-3 rounded-[var(--radius)] bg-warning-soft px-3 py-2 text-[13px] font-semibold text-warning-strong">Some dishes are still with the kitchen. Serve or cancel them before closing the bill.</p>}
       <Button size="xl" variant="primary" className="mt-4 w-full" disabled={pending || kitchen || !ready}
         onClick={async () => { const ok = await run(() => rpc("staff_pay", { p_visit: visit.id, p_parts: payload }).then(() => true),
-          visit.kind === "takeaway" ? `Paid · ${label}` : `Paid · table ${label} is free`); if (ok) { onOpenChange(false); onPaid(visit.id); } }}>
+          visit.kind === "takeaway" ? `Paid · ${label}` : `Paid · table ${label} is free`); if (ok) { onOpenChange(false); celebrate("Paid"); onPaid(visit.id); } }}>
         Mark paid · {inr(b.grand)}
       </Button>
     </Dialog>

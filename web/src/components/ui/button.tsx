@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-colors select-none " +
-    "disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 active:translate-y-px",
+    "disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 press",
   {
     variants: {
       variant: {
@@ -32,6 +32,6 @@ export const buttonVariants = cva(
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, type = "button", ...props }, ref) => (
-  <button ref={ref} type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />
+  <button ref={ref} type={type} data-variant={variant ?? "secondary"} className={cn(buttonVariants({ variant, size }), className)} {...props} />
 ));
 Button.displayName = "Button";

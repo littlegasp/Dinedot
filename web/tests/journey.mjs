@@ -74,6 +74,10 @@ try {
   await staff.locator("section[aria-label='Calls from tables'] > div", { hasText: "T3 called a waiter" }).getByRole("button", { name: "Done" }).click();
   await staff.getByText("T3 handled").waitFor();
   ok("waiter clears the call");
+  await staff.getByRole("radio", { name: "Plan" }).click();
+  await staff.getByRole("group", { name: "Main floor plan" }).waitFor();
+  await staff.getByRole("button", { name: /^T3, (Ordered|Eating)/ }).waitFor();
+  ok("floor plan shows T3 with its live state");
   await staff.getByRole("button", { name: /^T3/ }).first().click();
   const sheet = staff.getByRole("dialog");
   while (await sheet.getByRole("button", { name: "Served" }).count()) { await sheet.getByRole("button", { name: "Served" }).first().click(); await staff.waitForTimeout(400); }
@@ -110,7 +114,8 @@ try {
   // Owner sees today's sale; POS sends a staff order with a size
   await signIn(staff, "Owner");
   await staff.getByRole("heading", { name: /Good (morning|afternoon|evening)/ }).waitFor();
-  const sales = await staff.locator("p", { hasText: /^₹/ }).first().textContent();
+  let sales = "";   // the figure counts up from ₹0
+  for (let i = 0; i < 30 && (!sales || sales === "₹0"); i++) { if (i) await staff.waitForTimeout(100); sales = (await staff.locator("p", { hasText: /^₹/ }).first().textContent()) ?? ""; }
   if (!sales || sales === "₹0") throw new Error("Today shows no sales");
   ok(`owner sees today's sales (${sales})`);
   await staff.goto(BASE + "#/pos");
@@ -223,6 +228,15 @@ try {
   if (!before || before === after) throw new Error("QR was not replaced");
   await staff.keyboard.press("Escape");
   ok("tables: add a table, see its QR, replace the QR");
+  await staff.getByRole("dialog").waitFor({ state: "detached" });
+  await staff.getByRole("group", { name: "Garden floor plan" }).waitFor();
+  await staff.getByRole("button", { name: "Arrange tables" }).click();
+  await staff.getByRole("button", { name: /^Z9, 4 seats/ }).focus();
+  await staff.keyboard.press("Shift+ArrowRight");
+  await staff.getByRole("button", { name: "Save layout" }).click();
+  await staff.getByText("Layout saved").waitFor();
+  await staff.getByRole("button", { name: "Arrange tables" }).waitFor();
+  ok("tables: floor plan, a table moved with the keyboard and the layout saved");
 
   await nav("settings");
   await staff.getByLabel("Tagline").fill("Tested tagline");

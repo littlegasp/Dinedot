@@ -145,6 +145,21 @@ export async function teamAdmin(body: { action: "add" | "update" | "password" | 
   return j;
 }
 
+/** Phone alerts (edge function "push"): get the alert key, or send this person a test. */
+export async function pushFn(body: { action: "key" | "test" }): Promise<{ key?: string; sent?: number }> {
+  if (isDemo()) throw new ApiError("Phone alerts work on the live app, not in the demo.");
+  session ??= read<Session>(SESSION); await fresh();
+  let r: Response;
+  try {
+    r = await fetch(`${URL_}/functions/v1/push`, { method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + session?.access_token }, body: JSON.stringify(body) });
+  } catch { throw new ApiError("No internet. Check the connection."); }
+  if (r.status === 404) throw new ApiError("Phone alerts aren't switched on yet: the push function needs to be set up in Supabase.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ApiError(j.error || j.message || "Something went wrong.");
+  return j;
+}
+
 /* ---------- photos (Supabase Storage, bucket menu-photos) ---------- */
 /** Shrinks a photo in the browser to a JPEG no wider/taller than max px. */
 function shrink(file: File, max: number): Promise<Blob> {

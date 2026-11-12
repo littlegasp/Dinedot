@@ -54,7 +54,9 @@ const Demo = (() => {
     items.find(x => x.name === "Tandoori Prawns").available = false;
     ["Chicken Biryani", "Jeera Rice"].forEach(n => { items.find(x => x.name === n).station = "Curry"; });
     const tables = ["T1","T2","T3","T4","T5","T6","T7","T8"].map((c, i) => ({ id: "t" + (i + 1), code: c, name: "", area: i < 6 ? "Main" : "Terrace",
-      seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c }));
+      seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c,
+      x: [170, 400, 630, 270, 560, 820, 230, 590][i], y: [180, 180, 170, 450, 440, 420, 220, 360][i],
+      shape: ["square", "square", "round", "long", "round", "square", "round", "long"][i] }));
     const settings = { restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
       accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
@@ -322,7 +324,7 @@ const Demo = (() => {
         settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name,
           stations: s.stations || [], max_discount_pct: s.max_discount_pct ?? 20,
           notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed() },
-        tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active })),
+        tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active, x: t.x ?? null, y: t.y ?? null, shape: t.shape || "square" })),
         visits: db.visits.filter(v => v.status === "open" || v.status === "bill" || (v.kind === "takeaway" && v.status === "paid"
             && db.orders.some(o => o.visit_id === v.id && ["new", "cooking", "ready"].includes(o.status))))
           .sort((a, b) => a.opened_at < b.opened_at ? -1 : 1)
@@ -486,10 +488,20 @@ const Demo = (() => {
       if (!/^[A-Z0-9-]{1,12}$/.test(code)) err("Use up to 12 letters, numbers or dashes for the table number.");
       if (db.tables.some(t => t.code === code && t.id !== p.id)) err("Another table already uses that number.");
       let t = p.id && db.tables.find(x => x.id === p.id);
-      const row = { code, name: p.name || "", area: String(p.area || "").trim() || "Main", seats: +p.seats || 4, active: p.active !== false };
+      const shape = p.shape == null || p.shape === "" ? (t && t.shape) || "square" : p.shape;
+      if (!["square", "round", "long"].includes(shape)) err("Pick square, round or long.");
+      const row = { code, name: p.name || "", area: String(p.area || "").trim() || "Main", seats: +p.seats || 4, active: p.active !== false, shape };
+      if (t && t.area !== row.area) { t.x = null; t.y = null; }   // a new room: it gets a starting spot there
       if (t) Object.assign(t, row, p.sort != null ? { sort: +p.sort } : {});
       else { t = Object.assign({ id: uid(), token: "demo-" + code + "-" + Math.random().toString(36).slice(2, 6), sort: Math.max(0, ...db.tables.map(x => x.sort)) + 1 }, row); db.tables.push(t); }
       save(); return t.id; },
+    owner_save_plan({ p }){ need(isManager()); if (!Array.isArray(p) || p.length > 300) err("That layout is too big.");
+      let n = 0; p.forEach(s => { const x = Math.round(+s.x), y = Math.round(+s.y);
+        if (!(x >= 0 && x <= 1000 && y >= 0 && y <= 640)) err("A table is outside the plan.");
+        const t = db.tables.find(z => z.id === s.id); if (t) { t.x = x; t.y = y; n++; } });
+      log("plan_saved", n + " tables"); save(); return n; },
+    staff_push_subscribe(){ need(role()); return null; },
+    staff_push_unsubscribe(){ need(role()); return null; },
     owner_delete_table({ p_id }){ need(isManager()); if (db.visits.some(v => v.table_id === p_id)) err("This table has bills on record. Switch it off instead.");
       db.tables = db.tables.filter(t => t.id !== p_id); save(); return null; },
     owner_table_tokens(){ need(isManager()); const o = {}; db.tables.forEach(t => o[t.id] = t.token); return o; },

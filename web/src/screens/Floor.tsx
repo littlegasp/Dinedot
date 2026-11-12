@@ -6,12 +6,15 @@ import { Badge, Card, EmptyState, Input, Segmented, Skeleton } from "@/component
 import { Dialog, Sheet } from "@/components/ui/overlay";
 import { TABLE_STATE, TableStatus, tableState, visitOf } from "@/components/ui/status";
 import { CALL_ICON, CALL_LABEL } from "@/components/shell/AppShell";
+import { FloorPlan } from "@/components/FloorPlan";
+import { usePlanView, VIEW_OPTIONS } from "@/screens/Tables";
 import { rpc } from "@/lib/api";
 import { minutesSince, useAction, useStaff } from "@/lib/staff";
 import type { LiveTable, OrderStatus } from "@/lib/types";
 import { cn, inr, minsAgo } from "@/lib/utils";
 
 const ORDER_TONE: Record<OrderStatus, "coral" | "warning" | "success" | "neutral"> = { new: "coral", cooking: "warning", ready: "success", served: "neutral", cancelled: "neutral" };
+const CALL_SHORT = { waiter: "Waiter!", water: "Water!", bill: "Bill!", help: "Help!" } as const;
 const ORDER_WORD: Record<OrderStatus, string> = { new: "New", cooking: "Cooking", ready: "Ready to serve", served: "Served", cancelled: "Cancelled" };
 
 export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: boolean) => void }) {
@@ -21,6 +24,7 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
   const [reason, setReason] = React.useState("");
+  const [view, setView] = usePlanView();
 
   if (!live) return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-[132px]" />)}</div>;
   const tables = live.tables.filter(t => t.active);
@@ -32,7 +36,7 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
   const ov = open ? visitOf(open, live.visits) : undefined;
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       {live.calls.length > 0 && (
         <section aria-label="Calls from tables" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {live.calls.map(c => { const I = CALL_ICON[c.kind]; return (
@@ -48,17 +52,26 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
 
       <div className="flex flex-wrap items-center gap-2">
         {areas.length > 1 && <Segmented value={area} onChange={setArea} options={["All", ...areas].map(a => ({ value: a, label: a }))} />}
-        <div className="ml-auto hidden flex-wrap gap-3 text-[12px] text-fg-2 md:flex">
+        <Segmented className="order-last ml-auto md:order-none" value={view} onChange={setView} options={VIEW_OPTIONS} />
+        <div className="hidden flex-wrap gap-3 text-[12px] text-fg-2 lg:flex">
           {(Object.keys(TABLE_STATE) as (keyof typeof TABLE_STATE)[]).map(s => { const st = TABLE_STATE[s]; return <span key={s} className="flex items-center gap-1"><st.Icon className="size-3.5" aria-hidden />{st.label}</span>; })}
         </div>
       </div>
 
       {areas.filter(a => area === "All" || a === area).map(a => (
-        <section key={a} aria-label={a}>
-          {areas.length > 1 && <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-fg-2">{a}</h2>}
+        <section key={a} aria-label={a} className="min-w-0">
+          {areas.length > 1 && view === "cards" && <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-fg-2">{a}</h2>}
+          {view === "plan" ? (
+            <FloorPlan area={a} tables={tables.filter(t => t.area === a)} onOpen={t => setOpenId(t.id)} info={t => {
+              const v = visitOf(t, live.visits), st = tableState(v), call = live.calls.find(c => c.table_id === t.id);
+              return { state: st, word: call ? CALL_SHORT[call.kind] : TABLE_STATE[st].label, ping: !!call,
+                sub: v ? minsAgo(minutesSince(v.opened_at)) : undefined };
+            }} />
+          ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
             {tables.filter(t => t.area === a).map(t => <TableCard key={t.id} t={t} onOpen={() => setOpenId(t.id)} />)}
           </div>
+          )}
         </section>
       ))}
 

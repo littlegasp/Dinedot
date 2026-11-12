@@ -4,6 +4,7 @@ import { AlertTriangle, Check, Clock, ShoppingBag, Undo2, UtensilsCrossed } from
 import { Button } from "@/components/ui/button";
 import { Badge, Diet, Skeleton } from "@/components/ui/primitives";
 import { TicketStatus, visitLabel } from "@/components/ui/status";
+import { Swipe } from "@/components/ui/Swipe";
 import { rpc } from "@/lib/api";
 import { minutesSince, useAction, useStaff } from "@/lib/staff";
 import type { Order } from "@/lib/types";
@@ -69,7 +70,8 @@ export function KitchenScreen() {
                   const late = mins >= TARGET && col !== "ready";
                   const warn = !late && mins >= TARGET * 0.7 && col !== "ready";
                   return (
-                    <article key={o.id} className={cn("overflow-hidden rounded-[var(--radius-lg)] border bg-surface", late ? "border-danger" : warn ? "border-warning" : "border-border")}>
+                    <Swipe key={o.id} label={ACTION[col]} disabled={pending} onSwipe={() => step(o, NEXT[col])}>
+                    <article className={cn("rise overflow-hidden rounded-[var(--radius-lg)] border bg-surface", late ? "border-danger" : warn ? "border-warning" : "border-border")}>
                       <header className={cn("flex items-center gap-2 px-4 py-3", late ? "bg-danger-soft" : warn ? "bg-warning-soft" : "bg-muted")}>
                         <span className="font-display text-2xl font-extrabold text-fg">{table}</span>
                         {takeaway ? <Badge tone="coral"><ShoppingBag aria-hidden />Takeaway{paid && " · paid"}</Badge> : <Badge tone="neutral">{o.source === "guest" ? "QR" : "Staff"}</Badge>}
@@ -104,6 +106,7 @@ export function KitchenScreen() {
                         <Button size="lg" variant={col === "ready" ? "success" : "primary"} disabled={pending} className={cn("min-w-[150px]", col === "new" && "ml-auto")} onClick={() => step(o, NEXT[col])}>{ACTION[col]}</Button>
                       </footer>
                     </article>
+                    </Swipe>
                   );
                 })}
                 {!list.length && <p className="flex flex-col items-center gap-2 rounded-[var(--radius-lg)] border border-dashed border-border px-4 py-8 text-center text-sm text-fg-2"><UtensilsCrossed className="size-5" aria-hidden />Nothing here.</p>}

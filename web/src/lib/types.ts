@@ -31,7 +31,8 @@ export type Order = {
   items: OrderItem[];
 };
 
-export type LiveTable = { id: string; code: string; name: string; area: string; seats: number; active: boolean };
+export type TableShape = "square" | "round" | "long";
+export type LiveTable = { id: string; code: string; name: string; area: string; seats: number; active: boolean; x?: number | null; y?: number | null; shape?: TableShape };
 export type LiveVisit = {
   id: string; table_id: string | null; kind: "dine_in" | "takeaway"; token: number | null; status: VisitStatus; opened_at: string; bill_at: string | null;
   guests: number | null; split: number; tip_pct: number; pay_choice: "" | "upi" | "cash" | "card";
