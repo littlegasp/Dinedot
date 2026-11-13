@@ -176,11 +176,14 @@ try {
   await staff.getByRole("radio", { name: "Tandoor" }).click();
   const tk = staff.locator("article", { hasText: "Token 1" }).first();
   await tk.getByText(/Takeaway · paid/).waitFor();
-  await tk.getByRole("button", { name: /Paneer Tikka/ }).click();
-  await tk.getByRole("button", { name: /Paneer Tikka, done/ }).waitFor();
-  await tk.getByRole("button", { name: /Butter Naan/ }).click();
+  if (!(await tk.getByRole("button", { name: /Paneer Tikka/ }).isDisabled())) throw new Error("a New order's dish can be ticked");
+  await tk.getByRole("button", { name: "Start cooking" }).click();
+  const tc = staff.locator("section[aria-label=cooking] article", { hasText: "Token 1" });
+  await tc.getByRole("button", { name: /Paneer Tikka/ }).click();
+  await tc.getByRole("button", { name: /Paneer Tikka, done/ }).waitFor();
+  await tc.getByRole("button", { name: /Butter Naan/ }).click();
   await staff.locator("section[aria-label=ready] article", { hasText: "Token 1" }).waitFor();
-  ok("kitchen: station filter, dishes ticked one by one, order moves to Ready");
+  ok("kitchen: station filter, no ticks on New, dishes ticked one by one while Cooking, order moves to Ready");
   await staff.getByRole("radio", { name: "All stations" }).click();
   await staff.goto(BASE + "#/pos?table=takeaway");
   await staff.getByRole("radio", { name: /Token 1, paid, ready/ }).click();

@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Kitchen: dishes can be ticked off only once the order is Cooking, so tapping a dish on a New order no longer sends it straight to Ready. Tap Start cooking first." },
   { date: "13 Nov 2026", text: "Print QR codes now prints only the QR cards, 9 to an A4 sheet with a dashed line to cut along. Nothing else on the screen (or added by browser extensions) goes to the printer." },
   { date: "13 Nov 2026", text: "Tap the logo at the top to go back to your home screen (Today for owners and managers, POS for cashiers, Floor for waiters, Kitchen for the kitchen)." },
   { date: "13 Nov 2026", text: "Kitchen now follows the Day / Night look like every other screen (it used to stay dark). A kitchen screen that should stay dark: tap the moon button on it once." },
@@ -86,7 +87,7 @@ export const GUIDE: Record<Route, Section> = {
     intro: "New orders appear on their own, oldest first. Made for a wall screen or tablet.",
     steps: [
       "Tap Start cooking when you begin an order, Mark ready when it's plated, and Picked up when the waiter takes it.",
-      "Tap a dish to tick it off when it's done. When every dish of an order is ticked, the order moves to Ready by itself. Tap it again to untick.",
+      "Once an order is Cooking, tap a dish to tick it off when it's done. When every dish of an order is ticked, the order moves to Ready by itself. Tap it again to untick. New orders have no ticks: tap Start cooking first.",
       "Stations: if the owner has set up stations (Tandoor, Curry, Bar…), pick this screen's station at the top. You'll see only your dishes; the rest show as 'for other stations'. All stations shows everything.",
       "Takeaway orders show their token number and a Takeaway badge instead of a table.",
       "A chime plays for each new order. Tap anywhere once after opening the screen so the tablet allows sound. The screen stays on while the kitchen screen is open.",

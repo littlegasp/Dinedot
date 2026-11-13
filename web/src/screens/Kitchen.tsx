@@ -82,8 +82,8 @@ export function KitchenScreen() {
                       <ul className="px-2 py-1.5">
                         {mine.map(it => (
                           <li key={it.id}>
-                            <button aria-pressed={it.done} disabled={pending || col === "ready"} onClick={() => tickItem(it.id, !it.done)}
-                              aria-label={`${it.qty} ${it.name}${it.done ? ", done" : ""}`}
+                            <button aria-pressed={it.done} disabled={pending || col !== "cooking"} onClick={() => tickItem(it.id, !it.done)}
+                              aria-label={`${it.qty} ${it.name}${it.done ? ", done" : ""}`} title={col === "new" ? "Tap Start cooking first" : undefined}
                               className="flex w-full items-start gap-3 rounded-[var(--radius)] px-2 py-2 text-left hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent">
                               <span className="num w-8 shrink-0 font-display text-xl font-extrabold text-fg">{it.qty}×</span>
                               <span className={cn("flex-1 text-[17px] font-semibold leading-snug text-fg", it.done && col !== "ready" && "text-fg-2 line-through decoration-2")}>
@@ -92,7 +92,7 @@ export function KitchenScreen() {
                                   <span className="block text-[13px] font-medium text-coral-strong no-underline">{[it.size, ...it.addons, it.note].filter(Boolean).join(" · ")}</span>)}
                                 {!here && it.station && stations.length > 0 && <span className="block text-[12px] font-medium text-fg-2 no-underline">{it.station}</span>}
                               </span>
-                              {col !== "ready" && <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border-2", it.done ? "border-success bg-success text-[#0d1a12]" : "border-border-strong")} aria-hidden>
+                              {col === "cooking" && <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border-2", it.done ? "border-success bg-success text-[#0d1a12]" : "border-border-strong")} aria-hidden>
                                 {it.done && <Check className="size-4" strokeWidth={3} />}</span>}
                             </button>
                           </li>
