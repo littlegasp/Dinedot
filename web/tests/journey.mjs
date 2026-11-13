@@ -266,6 +266,13 @@ try {
   await staff.getByRole("button", { name: "Arrange tables" }).waitFor();
   await staff.getByRole("group", { name: "Garden floor plan" }).locator("text", { hasText: "Entrance" }).waitFor();
   ok("tables: floor plan, a table and the entrance placed with the keyboard, layout saved");
+  await staff.getByRole("button", { name: "Print QR codes" }).click();
+  const qrFrame = () => [...document.querySelectorAll("iframe[srcdoc]")].map(f => f.getAttribute("srcdoc")).find(h => h.includes("QR codes</title>"));
+  await staff.waitForFunction(qrFrame);
+  const qrSheet = await staff.evaluate(qrFrame);
+  const cards = (qrSheet.match(/class="card"/g) || []).length;
+  if (cards < 9 || !qrSheet.includes("Z9") || qrSheet.includes("Floor plan")) throw new Error("QR print sheet: " + cards + " cards");
+  ok("tables: Print QR codes prints only the cards (" + cards + "), not the app");
 
   await nav("settings");
   await staff.getByLabel("Tagline").fill("Tested tagline");
@@ -292,7 +299,7 @@ try {
   await nav("help");
   await staff.getByRole("heading", { name: "What's new" }).waitFor();
   await staff.getByRole("button", { name: "Tables & QR" }).last().click();
-  await staff.getByText(/Print QR codes prints one card per table/).waitFor();
+  await staff.getByText(/Print QR codes prints one card per table/).first().waitFor();
   ok("help: what's new and the Tables & QR guide");
 
   // ---- 0006: bill settings, cashier ----

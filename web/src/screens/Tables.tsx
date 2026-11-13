@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState, Field, Input, Segmented, Skeleton, Switch } from "@/components/ui/primitives";
 import { FloorPlan, MARKS, ROOM, spotOf, type Spot } from "@/components/FloorPlan";
 import { Sheet, toast } from "@/components/ui/overlay";
-import { LogoMark } from "@/components/brand/Logo";
 import { rpc } from "@/lib/api";
+import { printQrCards } from "@/lib/qrprint";
 import { useAction, useStaff } from "@/lib/staff";
 import type { LiveArea, LiveTable, Mark, MarkKind, RoomShape, TableShape } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,19 +53,13 @@ export function TablesScreen() {
   const [areasOpen, setAreasOpen] = React.useState(false);
   const [tokens, setTokens] = React.useState<Record<string, string> | null>(null);
   const [edit, setEdit] = React.useState<Partial<LiveTable> | null>(null);
-  const [printing, setPrinting] = React.useState<LiveTable[] | null>(null);
   const loadTokens = React.useCallback(() => rpc<Record<string, string>>("owner_table_tokens").then(setTokens).catch(e => toast((e as Error).message, "error")), []);
   React.useEffect(() => { loadTokens(); }, [loadTokens]);
-  React.useEffect(() => {
-    if (!printing) return;
-    const done = () => setPrinting(null);
-    window.addEventListener("afterprint", done);
-    const t = setTimeout(() => window.print(), 150);
-    return () => { clearTimeout(t); window.removeEventListener("afterprint", done); };
-  }, [printing]);
 
   if (!live || !tokens) return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-40" />)}</div>;
   const tables = live.tables;
+  // only the QR cards go to the printer (a hidden frame), never the app or browser add-ons
+  const setPrinting = (list: LiveTable[]) => printQrCards(live.settings.name, list.filter(t => tokens[t.id]).map(t => ({ code: t.code, name: t.name, url: guestUrl(tokens[t.id]) })));
   const areaList = areasOf(live.areas, tables);
   const names = areaList.map(a => a.name);
   const cur = areaList.find(a => a.name === area) ?? areaList[0];
@@ -143,19 +137,6 @@ export function TablesScreen() {
         onClose={() => setEdit(null)} onPrint={t => { setEdit(null); setPrinting([t]); }}
         onSaved={a => { setEdit(null); if (a) setArea(a); reload(); loadTokens(); }} onToken={loadTokens} />}
 
-      {/* Print sheet: only this shows on paper (see globals.css @media print) */}
-      {printing && (
-        <div className="print-sheet" aria-hidden>
-          {printing.map(t => (
-            <div key={t.id} className="qr-card">
-              <div className="flex items-center justify-center gap-2"><LogoMark size={22} /><span className="font-display text-[15px] font-extrabold">{live.settings.name}</span></div>
-              <Qr text={guestUrl(tokens[t.id])} className="mx-auto my-3 size-[46mm]" />
-              <p className="font-display text-[28px] font-extrabold leading-none">{t.code}</p>
-              <p className="mt-2 text-[12px]">Scan to see the menu, order and pay.<br />No app or sign-up needed.</p>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Print QR codes now prints only the QR cards, 9 to an A4 sheet with a dashed line to cut along. Nothing else on the screen (or added by browser extensions) goes to the printer." },
   { date: "13 Nov 2026", text: "Tap the logo at the top to go back to your home screen (Today for owners and managers, POS for cashiers, Floor for waiters, Kitchen for the kitchen)." },
   { date: "13 Nov 2026", text: "Kitchen now follows the Day / Night look like every other screen (it used to stay dark). A kitchen screen that should stay dark: tap the moon button on it once." },
   { date: "13 Nov 2026", text: "Fixed: on phones, the highlight in the bottom menu now sits under the screen you're on (it stayed on Today)." },
@@ -129,7 +130,7 @@ export const GUIDE: Record<Route, Section> = {
       "To match the plan to your restaurant, tap Arrange tables, drag each table to where it stands, then tap Save layout. Cancel leaves the plan as it was. Each area is arranged on its own.",
       "While arranging, use + Add to the room… to place the Entrance, Counter, Kitchen, Washroom, Window, Stairs or a Pillar, and drag it into place. Tap one and Remove to take it away. Staff see them on Floor too.",
       "Moving a table to another area puts it at a starting spot there; arrange it again.",
-      "Print QR codes prints one card per table. Stick each card on its table.",
+      "Print QR codes prints one card per table, 9 to an A4 sheet, with a dashed line to cut along. Stick each card on its table. To print just one, tap the table, then Print this QR.",
       "If a QR card is lost or copied, open the table and tap Replace QR. The old code stops working at once; print the new one.",
       "Switch a table off to hide it for a while. A table with bills on record can't be deleted, only switched off.",
     ],
