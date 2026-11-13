@@ -2,7 +2,7 @@
 import * as React from "react";
 import { Command } from "cmdk";
 import { Bell, BellRing, Building2, ChevronsLeft, ChevronsRight, Download, Droplets, LayoutGrid, LifeBuoy, Lock, LogOut, Megaphone, Menu as MenuIcon, Moon, Plus, Receipt, RefreshCw, Search, Share, Smartphone, Sun, Vibrate, WifiOff, X } from "lucide-react";
-import { NAV, type Route } from "@/lib/routes";
+import { HOME, NAV, type Route } from "@/lib/routes";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { Kbd, Switch } from "@/components/ui/primitives";
@@ -99,6 +99,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
   const alerts = useAlertSettings();
   const stale = useNewVersion();
   const nav = NAV.filter(n => role && n.roles.includes(role));
+  const home: Route = role ? HOME[role] : "today";   // the logo opens the screen your role starts on
   const [moreOpen, setMoreOpen] = React.useState(false);
   // Phone tab bar: the main screens, a raised + for a new order (POS) in the middle, and More
   const centre = nav.find(n => n.route === "pos");
@@ -122,7 +123,9 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
   return (
     <div className={cn("min-h-dvh transition-[padding] duration-300", folded ? "lg:pl-[84px]" : "lg:pl-[248px]")}>
       <aside className={cn("fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width] duration-300 lg:flex", folded ? "w-[84px]" : "w-[248px]")}>
-        <div className={cn("flex h-16 items-center", folded ? "justify-center" : "px-5")}><Logo compact={folded} /></div>
+        <div className={cn("flex h-16 items-center", folded ? "justify-center" : "px-5")}>
+          <button onClick={() => go(home)} aria-label="Go to your home screen" className="rounded-[var(--radius)]"><Logo compact={folded} /></button>
+        </div>
         <div className={cn("px-3 pb-3", folded && "hidden")}>
           <div className="rounded-[var(--radius)] border border-border bg-muted/60 p-3">
             <p className="truncate text-[13px] font-bold text-fg">{live?.settings.name ?? me?.restaurant ?? ""}</p>
@@ -204,7 +207,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
 
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:px-8"
         style={{ minHeight: "calc(64px + env(safe-area-inset-top))" }}>
-        <div className="lg:hidden"><Logo compact /></div>
+        <button onClick={() => go(home)} aria-label="Go to your home screen" className="rounded-[var(--radius)] lg:hidden"><Logo compact /></button>
         <button onClick={() => setCmd(true)} className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[var(--radius)] border border-border bg-surface px-3 text-sm text-fg-2 shadow-[var(--shadow-sm)] hover:border-border-strong sm:max-w-sm">
           <Search className="size-4 shrink-0" aria-hidden /><span className="truncate">Search tables, dishes, screens</span>
           <span className="ml-auto hidden gap-1 sm:flex"><Kbd>Ctrl</Kbd><Kbd>K</Kbd></span>

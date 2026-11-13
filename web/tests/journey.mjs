@@ -198,7 +198,9 @@ try {
       const pill = await bar.locator(".glide").boundingBox(), tab = await bar.getByRole("button", { name: new RegExp(label + "$") }).first().boundingBox();
       if (!pill || !tab || Math.abs(pill.x + pill.width / 2 - (tab.x + tab.width / 2)) > 4) throw new Error(`tab highlight isn't under ${label}: ${JSON.stringify({ pill, tab })}`);
     }
-    ok("phone tab bar: the highlight follows the screen (Kitchen, Floor, Today)");
+    await nav("kitchen"); await staff.getByRole("button", { name: "Go to your home screen" }).click();
+    await staff.waitForURL(/#\/today$/);
+    ok("phone tab bar: the highlight follows the screen (Kitchen, Floor, Today); the logo goes home");
   }
   await nav("menu");
   await staff.getByRole("heading", { name: "Menu", exact: true }).waitFor();

@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Tap the logo at the top to go back to your home screen (Today for owners and managers, POS for cashiers, Floor for waiters, Kitchen for the kitchen)." },
   { date: "13 Nov 2026", text: "Kitchen now follows the Day / Night look like every other screen (it used to stay dark). A kitchen screen that should stay dark: tap the moon button on it once." },
   { date: "13 Nov 2026", text: "Fixed: on phones, the highlight in the bottom menu now sits under the screen you're on (it stayed on Today)." },
   { date: "13 Nov 2026", text: "Areas: Tables & QR → Areas lists the parts of your restaurant (Main, Rooftop, AC Hall…). Add, rename and reorder them, and pick each room's shape (Wide, Square or Long). When you add a table you pick its area from a list, so \"terrace\" and \"Terrace\" can't become two rooms. In Arrange tables you can also place the entrance, counter, kitchen, washroom, windows, stairs and pillars." },
@@ -165,6 +166,7 @@ export const GUIDE: Record<Route, Section> = {
       "The bell (top right) shows calls from tables. At the bottom of it you can turn the alert sound and notifications on or off for this device.",
       "Phone alerts (in the bell): tap Turn on phone alerts and allow notifications. Your phone then buzzes even when the app is closed: the kitchen for new orders, waiters and cashiers for calls and food that's ready, managers for calls. On an iPhone, add the app to the Home Screen first.",
       "Install as an app: on Android tap More → Install app (or Install app at the bottom of the menu on a computer). On an iPhone open the app in Safari, tap Share, then Add to Home Screen.",
+      "Tap the logo at the top to go back to the screen you start on: Today (owner, manager), POS (cashier), Floor (waiter) or Kitchen.",
       "On a phone the menu is at the bottom. The big + in the middle opens the POS. More has Day / Night, Vibrate on taps, Install app and Sign out.",
       "Sheets that slide up from the bottom close when you pull them down."],
   },
