@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Kitchen now follows the Day / Night look like every other screen (it used to stay dark). A kitchen screen that should stay dark: tap the moon button on it once." },
   { date: "13 Nov 2026", text: "Fixed: on phones, the highlight in the bottom menu now sits under the screen you're on (it stayed on Today)." },
   { date: "13 Nov 2026", text: "Areas: Tables & QR → Areas lists the parts of your restaurant (Main, Rooftop, AC Hall…). Add, rename and reorder them, and pick each room's shape (Wide, Square or Long). When you add a table you pick its area from a list, so \"terrace\" and \"Terrace\" can't become two rooms. In Arrange tables you can also place the entrance, counter, kitchen, washroom, windows, stairs and pillars." },
   { date: "13 Nov 2026", text: "Floor plan: Tables & QR and Floor now show each room drawn from above, with every table in its place and its chairs. On Floor each table shows its colour and word (Free, Ordered, Eating, Bill asked) and a table that's calling pulses. Managers place tables with Arrange tables. Plan / Cards switches back to the old view." },

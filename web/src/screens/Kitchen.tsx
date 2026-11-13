@@ -19,7 +19,7 @@ type Col = keyof typeof NEXT;
 const STATION_KEY = "dineos.station";   // each kitchen screen remembers its own station
 const readStation = () => { try { return localStorage.getItem(STATION_KEY) ?? ""; } catch { return ""; } };
 
-/** Kitchen display: always dark (no glare on a wall screen), big type, big buttons.
+/** Kitchen display: follows the Day / Night look like every other screen; big type, big buttons.
     A station screen shows only its own dishes; any dish can be ticked off on its own. */
 export function KitchenScreen() {
   const { live } = useStaff();
@@ -41,7 +41,7 @@ export function KitchenScreen() {
   const tickItem = (id: number, done: boolean) => run(() => rpc("staff_item_done", { p_item: id, p_done: done }));
 
   return (
-    <div className="theme-dark min-h-[calc(100dvh-64px)] bg-background px-4 py-5 text-fg lg:px-8">
+    <div className="min-h-[calc(100dvh-64px)] bg-background px-4 py-5 text-fg lg:px-8">
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h1 className="text-[26px] font-extrabold text-fg">Kitchen{here && <span className="text-fg-2"> · {here}</span>}</h1>
