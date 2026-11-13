@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Guest bill: the total updates as guests pick a tip or split, before they tap Ask for the bill. Besides the % choices they can type a tip in rupees (₹ Amount). Paying by UPI / QR opens their UPI app with the amount filled in, and shows a QR with the amount for paying from another phone. UPI shows only when your UPI ID is set in Settings." },
   { date: "13 Nov 2026", text: "Kitchen: dishes can be ticked off only once the order is Cooking, so tapping a dish on a New order no longer sends it straight to Ready. Tap Start cooking first." },
   { date: "13 Nov 2026", text: "Print QR codes now prints only the QR cards, 9 to an A4 sheet with a dashed line to cut along. Nothing else on the screen (or added by browser extensions) goes to the printer." },
   { date: "13 Nov 2026", text: "Tap the logo at the top to go back to your home screen (Today for owners and managers, POS for cashiers, Floor for waiters, Kitchen for the kitchen)." },
@@ -60,6 +61,7 @@ export const GUIDE: Record<Route, Section> = {
       "Pick the table at the top. A coloured dot shows if it's free (grey), ordered (amber), eating (green) or asking for the bill (coral).",
       "Tap dishes to add them. Dishes with sizes or extras ask you to choose first.",
       "Add a note for the kitchen if needed, then tap Send.",
+      "A guest's tip shows on the bill: a % they picked, or an amount they typed (shown as ₹50 (guest) under Tip). Picking a % there replaces it.",
       "When the guests are ready to pay, tap Take payment. Choose UPI, Card or Cash, type the UPI or card reference if you have it, and tap Mark paid.",
       "Paying in parts (some UPI, the rest cash)? Tap Split. Set the method and amount of each part, or tap Add a payment. Mark paid works once the parts add up to the bill.",
       "Takeaway: tap Takeaway at the start of the table list, add dishes and tap Send. The order gets a token number; tell the guest their token. The token stays at the top until it's handed over.",
@@ -155,7 +157,7 @@ export const GUIDE: Record<Route, Section> = {
       "Bill: GST % and service charge %, the tip choices guests see, and the most a manager can take off a bill as a discount.",
       "Kitchen stations: type your counters separated by commas (for example Tandoor, Curry, Bar). Then pick a station for each section in Menu.",
       "Bills: your legal name, address, GSTIN and FSSAI licence number as they should print, the bill number prefix, and the receipt paper width (80 or 58 mm). Tick GST composition scheme only if you're registered under it: bills then print as a Bill of supply with no GST.",
-      "Payments: your UPI ID (money goes straight to you, no fees), and whether you take cash and card.",
+      "Payments: your UPI ID (money goes straight to you, no fees), and whether you take UPI / QR, cash and card. Guests only see UPI / QR once the UPI ID is filled in. They pay with the amount already filled in, by their UPI app or by scanning the QR on their bill.",
       "Guest Wi-Fi: shown to guests only while they have an open bill.",
       "Tap Save at the bottom. Changes reach guests' phones within a few seconds.",
     ],

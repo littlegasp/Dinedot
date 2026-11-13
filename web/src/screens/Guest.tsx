@@ -1,12 +1,13 @@
 "use client";
 import * as React from "react";
+import qrcode from "qrcode-generator";
 import { BellRing, Check, ChefHat, Clock, Droplets, Flame, Minus, Plus, Receipt, Search, ShoppingBag, Smartphone, Star, UtensilsCrossed, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Diet } from "@/components/ui/primitives";
 import { Dialog, Sheet, toast, Toaster } from "@/components/ui/overlay";
 import { newRequestId, rpc } from "@/lib/api";
 import type { CartLine, GuestMenu, GuestState } from "@/lib/types";
-import { cn, inr } from "@/lib/utils";
+import { cn, inr, tipLabel } from "@/lib/utils";
 import { ReceiptDialog } from "./ReceiptDialog";
 
 type Item = GuestMenu["items"][number];
@@ -260,51 +261,86 @@ function Picker({ i, onAdd }: { i: Item; onAdd: (s?: { name: string; price: numb
 
 function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; token: string; menu: GuestMenu; visit: NonNullable<GuestState["visit"]>; onDone: () => void }) {
   const p = menu.place;
-  const [split, setSplit] = React.useState(visit.split);
-  const [tip, setTip] = React.useState(visit.tip_pct);
-  const [pay, setPay] = React.useState(visit.pay_choice || (p.pay.upi ? "upi" : p.pay.cash ? "cash" : "card"));
-  const [busy, setBusy] = React.useState(false);
   const b = visit.bill;
   const asked = visit.status === "bill";
-  const upiLink = visit.upi ? `upi://pay?${new URLSearchParams({ pa: visit.upi.id, pn: visit.upi.name, am: String(asked ? b.each : b.grand), cu: "INR", tn: `${menu.table.name} bill` })}` : "";
+  const [split, setSplit] = React.useState(visit.split);
+  // the tip: one of the restaurant's % choices, or an amount the guest types
+  const [tip, setTip] = React.useState<number | "amount">((b.tip_amount ?? 0) > 0 ? "amount" : visit.tip_pct);
+  const [tipAmt, setTipAmt] = React.useState((b.tip_amount ?? 0) > 0 ? String(Math.round(b.tip_amount!)) : "");
+  const [pay, setPay] = React.useState(visit.pay_choice || (p.pay.upi ? "upi" : p.pay.cash ? "cash" : "card"));
+  const [busy, setBusy] = React.useState(false);
+  // What the bill will be with these choices, before asking (the server works out the real one:
+  // tip % of the items after any discount, rounded; split rounded up)
+  const net = b.subtotal - (b.discount ?? 0);
+  const tipNow = asked ? b.tip : tip === "amount" ? Math.max(0, Math.round(Number(tipAmt) || 0)) : Math.round(net * tip / 100);
+  const grandNow = asked ? b.grand : b.total + tipNow;
+  const splitNow = asked ? b.split : split;
+  const eachNow = asked ? b.each : Math.ceil(grandNow / splitNow);
+  const tipWord = asked ? tipLabel(b) : tip === "amount" || !tip ? "Tip" : `Tip ${tip}%`;
+  const tooBig = tip === "amount" && tipNow > b.total;
+  const payNow = splitNow > 1 ? eachNow : grandNow;
+  const upiLink = visit.upi ? `upi://pay?${new URLSearchParams({ pa: visit.upi.id, pn: visit.upi.name, am: String(payNow), cu: "INR", tn: `${menu.table.name} bill` })}` : "";
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Your bill" description={menu.table.name}>
       <ul className="grid gap-1 text-sm">{b.lines.map((l, i) => <li key={i} className="flex justify-between text-fg"><span><span className="num">{l.qty}×</span> {l.name}{l.size && ` · ${l.size}`}</span><span className="num">{inr(l.amount)}</span></li>)}</ul>
-      <dl className="mt-3 grid gap-1 border-t border-border pt-3 text-[13px]">
+      <dl className="mt-3 grid gap-1 border-t border-border pt-3 text-[13px]" aria-live="polite">
         <div className="flex justify-between"><dt className="text-fg-2">Items</dt><dd className="num text-fg">{inr(b.subtotal, { paise: true })}</dd></div>
         {(b.discount ?? 0) > 0 && <div className="flex justify-between"><dt className="text-fg-2">Discount{b.discount_kind === "pct" ? ` ${b.discount_value}%` : ""}</dt><dd className="num text-success">−{inr(b.discount!, { paise: true })}</dd></div>}
         {b.service > 0 && <div className="flex justify-between"><dt className="text-fg-2">Service {b.service_pct}%</dt><dd className="num text-fg">{inr(b.service, { paise: true })}</dd></div>}
         <div className="flex justify-between"><dt className="text-fg-2">GST {b.gst_pct}%</dt><dd className="num text-fg">{inr(b.gst, { paise: true })}</dd></div>
-        {b.tip > 0 && <div className="flex justify-between"><dt className="text-fg-2">Tip {b.tip_pct}%</dt><dd className="num text-fg">{inr(b.tip)}</dd></div>}
-        <div className="flex justify-between pt-1 text-lg font-extrabold"><dt className="text-fg">Total</dt><dd className="num text-fg">{inr(b.grand)}</dd></div>
-        {b.split > 1 && <div className="flex justify-between font-semibold"><dt className="text-fg-2">{b.split} ways</dt><dd className="num text-fg">{inr(b.each)} each</dd></div>}
+        {tipNow > 0 && <div className="flex justify-between"><dt className="text-fg-2">{tipWord}</dt><dd className="num text-fg">{inr(tipNow)}</dd></div>}
+        <div className="flex justify-between pt-1 text-lg font-extrabold"><dt className="text-fg">Total</dt><dd className="num text-fg" data-testid="bill-total">{inr(grandNow)}</dd></div>
+        {splitNow > 1 && <div className="flex justify-between font-semibold"><dt className="text-fg-2">{splitNow} ways</dt><dd className="num text-fg">{inr(eachNow)} each</dd></div>}
       </dl>
       {!asked ? (
         <div className="mt-4 grid gap-4">
           <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Split the bill</legend>
-            <div className="flex gap-2">{[1, 2, 3, 4, 5, 6].map(n => <Pill key={n} on={split === n} onClick={() => setSplit(n)}>{n === 1 ? "No" : n}</Pill>)}</div></fieldset>
+            <div className="flex flex-wrap gap-2">{[1, 2, 3, 4, 5, 6].map(n => <Pill key={n} on={split === n} onClick={() => setSplit(n)}>{n === 1 ? "No" : n}</Pill>)}</div></fieldset>
           {p.tips.some(t => t > 0) && <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">Add a tip for the team?</legend>
-            <div className="flex gap-2">{p.tips.map(t => <Pill key={t} on={tip === t} onClick={() => setTip(t)}>{t ? `${t}%` : "No tip"}</Pill>)}</div></fieldset>}
+            <div className="flex flex-wrap gap-2">
+              {p.tips.map(t => <Pill key={t} on={tip === t} onClick={() => setTip(t)}>{t ? `${t}%` : "No tip"}</Pill>)}
+              <Pill on={tip === "amount"} onClick={() => setTip("amount")}>₹ Amount</Pill>
+            </div>
+            {tip === "amount" && (
+              <label className="mt-2 flex h-11 items-center gap-2 rounded-[var(--radius)] border border-border bg-surface px-3 focus-within:ring-2 focus-within:ring-[var(--focus)]">
+                <span className="font-semibold text-fg-2">₹</span>
+                <input aria-label="Tip amount" inputMode="numeric" autoFocus value={tipAmt} placeholder="e.g. 50"
+                  onChange={e => setTipAmt(e.target.value.replace(/\D/g, "").slice(0, 5))} className="num min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none" />
+              </label>)}
+            {tooBig && <p className="mt-1 text-[12px] font-semibold text-danger">The tip can&apos;t be more than the bill.</p>}
+          </fieldset>}
           <fieldset><legend className="mb-2 text-[13px] font-semibold text-fg">How will you pay?</legend>
-            <div className="flex gap-2">{(["upi", "card", "cash"] as const).filter(m => p.pay[m]).map(m => <Pill key={m} on={pay === m} onClick={() => setPay(m)}>{m === "upi" ? "UPI" : m === "card" ? "Card" : "Cash"}</Pill>)}</div></fieldset>
-          <Button size="xl" variant="primary" disabled={busy} onClick={async () => {
+            <div className="flex flex-wrap gap-2">{(["upi", "card", "cash"] as const).filter(m => p.pay[m]).map(m => <Pill key={m} on={pay === m} onClick={() => setPay(m)}>{m === "upi" ? "UPI / QR" : m === "card" ? "Card" : "Cash"}</Pill>)}</div></fieldset>
+          <Button size="xl" variant="primary" disabled={busy || tooBig} onClick={async () => {
             setBusy(true);
-            try { await rpc("guest_bill", { p_token: token, p_split: split, p_tip_pct: tip, p_pay: pay }); toast("Your bill is on its way"); onDone(); }
-            catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); } }}>Ask for the bill</Button>
+            try {
+              await rpc("guest_bill", { p_token: token, p_split: split, p_tip_pct: tip === "amount" ? 0 : tip, p_pay: pay, p_tip_amount: tip === "amount" ? tipNow : 0 });
+              toast("Your bill is on its way"); onDone();
+            } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); } }}>Ask for the bill · {inr(payNow)}{splitNow > 1 ? " each" : ""}</Button>
         </div>
       ) : (
         <div className="mt-4 grid gap-3">
           <p className="rounded-[var(--radius)] bg-success-soft px-4 py-3 text-sm font-semibold text-success">A waiter is bringing your bill.</p>
-          {visit.pay_choice === "upi" && upiLink && (
+          {visit.pay_choice === "upi" && upiLink && (<>
             <a href={upiLink} className="flex h-14 items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-coral text-base font-bold text-[#171b24]">
-              <Smartphone className="size-5" aria-hidden />Pay {inr(b.split > 1 ? b.each : b.grand)} by UPI
+              <Smartphone className="size-5" aria-hidden />Pay {inr(payNow)} by UPI
             </a>
-          )}
-          {visit.pay_choice === "upi" && upiLink && <p className="text-[12px] text-fg-2">Opens your UPI app with the amount filled in, paid straight to {visit.upi!.name}. Show the waiter the payment screen.</p>}
+            <p className="text-[12px] text-fg-2">Opens your UPI app (GPay, PhonePe, Paytm…) with the amount filled in, paid straight to {visit.upi!.name}. Show the waiter the payment screen.</p>
+            <div className="grid justify-items-center gap-2 rounded-[var(--radius-lg)] border border-border p-4">
+              <UpiQr text={upiLink} />
+              <p className="text-center text-[12px] text-fg-2">Paying from another phone? Scan this with any UPI app. {inr(payNow)} is already filled in.</p>
+            </div>
+          </>)}
         </div>
       )}
     </Sheet>
   );
+}
+
+/** The UPI payment as a QR code (amount included), for paying from another phone. */
+function UpiQr({ text }: { text: string }) {
+  const svg = React.useMemo(() => { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }, [text]);
+  return <div role="img" aria-label="UPI QR code with the amount" className="size-48 rounded-[var(--radius)] bg-white [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {

@@ -174,16 +174,16 @@ const Demo = (() => {
       x.qty += i.qty; x.amount += i.line_total; g.set(k, x); }));
     return [...g.values()];
   }
-  function freeze(d, v){ const b = Money.bill(linesOf(d, v.id), d.settings, v.tip_pct, v.split, v.discount_kind ? { kind: v.discount_kind, value: v.discount_value } : null);
+  function freeze(d, v){ const b = Money.bill(linesOf(d, v.id), d.settings, v.tip_pct, v.split, v.discount_kind ? { kind: v.discount_kind, value: v.discount_value } : null, v.tip_amount);
     return { subtotal: b.subtotal, discount: b.discount, service: b.service, gst: b.gst, tip: b.tip, total: b.grand }; }
   function bill(vid){
     const v = db.visits.find(x => x.id === vid); if (!v) return null;
     const lines = linesOf(db, vid);
     if (v.status === "paid") return { lines, subtotal: v.subtotal, discount: v.discount || 0, discount_kind: v.discount_kind || null, discount_value: v.discount_value || 0,
       discount_reason: v.discount_reason || "", service: v.service, gst: v.gst, tip: v.tip, total: v.total - v.tip, grand: v.total,
-      split: v.split, each: Math.ceil(v.total / v.split), tip_pct: v.tip_pct, service_pct: db.settings.service_pct, gst_pct: db.settings.gst_pct,
+      split: v.split, each: Math.ceil(v.total / v.split), tip_pct: v.tip_pct, tip_amount: v.tip_amount || 0, service_pct: db.settings.service_pct, gst_pct: db.settings.gst_pct,
       payments: (db.payments || []).filter(p => p.visit_id === vid).map(p => ({ method: p.method, amount: p.amount, reference: p.reference })) };
-    return Money.bill(lines, db.settings, v.tip_pct, v.split, discOf(v));
+    return Money.bill(lines, db.settings, v.tip_pct, v.split, discOf(v), v.tip_amount);
   }
   function priceCart(items){
     if (!Array.isArray(items) || !items.length) err("Your order is empty.");
@@ -309,11 +309,14 @@ const Demo = (() => {
       if (db.calls.some(c => c.table_id === t.id && c.kind === p_kind && !c.done_at)) return { ok: true, already: true };
       const v = openVisit(t.id); db.calls.push({ id: uid(), table_id: t.id, visit_id: v ? v.id : null, kind: p_kind, created_at: now(), seen_at: null, seen_by: null, done_at: null });
       save(); return { ok: true, already: false }; },
-    guest_bill({ p_token, p_split, p_tip_pct, p_pay }){ const t = tableBy(p_token), v = openVisit(t.id);
+    guest_bill({ p_token, p_split, p_tip_pct, p_pay, p_tip_amount }){ const t = tableBy(p_token), v = openVisit(t.id);
       if (!v) err("There's no open bill for this table.");
       if (!db.orders.some(o => o.visit_id === v.id && o.status !== "cancelled")) err("Nothing has been ordered yet.");
-      if (p_tip_pct && !db.settings.tip_options.includes(+p_tip_pct)) err("Pick one of the tip options.");
-      Object.assign(v, { status: "bill", bill_at: v.bill_at || now(), split: Math.max(1, Math.min(+p_split || 1, 20)), tip_pct: +p_tip_pct || 0, pay_choice: p_pay || "" });
+      const amt = Math.round(+p_tip_amount || 0);
+      if (amt < 0) err("The tip can't be below zero.");
+      if (!amt && p_tip_pct && !db.settings.tip_options.includes(+p_tip_pct)) err("Pick one of the tip options.");
+      if (amt > 0 && amt > Math.max(bill(v.id).total, 1)) err("The tip can't be more than the bill.");
+      Object.assign(v, { status: "bill", bill_at: v.bill_at || now(), split: Math.max(1, Math.min(+p_split || 1, 20)), tip_pct: amt > 0 ? 0 : +p_tip_pct || 0, tip_amount: amt, pay_choice: p_pay || "" });
       if (!db.calls.some(c => c.table_id === t.id && c.kind === "bill" && !c.done_at))
         db.calls.push({ id: uid(), table_id: t.id, visit_id: v.id, kind: "bill", created_at: now(), seen_at: null, seen_by: null, done_at: null });
       save(); return bill(v.id); },
@@ -374,12 +377,16 @@ const Demo = (() => {
       return addOrder(p_table, p_items, p_note, p_guests, "staff", p_request_id); },
     staff_call({ p_call, p_action }){ need(isFloor()); const c = db.calls.find(x => x.id === p_call); if (!c) return null;
       c.seen_at = c.seen_at || now(); c.seen_by = c.seen_by || me().id; if (p_action === "done") c.done_at = now(); save(); return null; },
-    staff_visit_update({ p_visit, p_split, p_tip_pct, p_guests }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && (x.status === "open" || x.status === "bill"));
+    staff_visit_update({ p_visit, p_split, p_tip_pct, p_guests, p_tip_amount }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && (x.status === "open" || x.status === "bill"));
       if (!v) err("This table's bill is already closed.");
-      const was = { split: v.split, tip: v.tip_pct };
-      if (p_split != null) v.split = Math.max(1, Math.min(+p_split, 20)); if (p_tip_pct != null) v.tip_pct = Math.max(0, Math.min(+p_tip_pct, 30));
+      const tipWord = () => v.tip_amount > 0 ? "₹" + Math.round(v.tip_amount) : v.tip_pct + "%";
+      const was = { split: v.split, tip: tipWord() };
+      if (p_tip_amount != null) { const a = Math.round(+p_tip_amount); if (!(a >= 0 && a <= 100000)) err("Check the tip amount."); v.tip_amount = a; }
+      else if (p_tip_pct != null && +p_tip_pct !== v.tip_pct) v.tip_amount = 0;   // a new % clears an amount tip (0009)
+      if (p_split != null) v.split = Math.max(1, Math.min(+p_split, 20));
+      if (v.tip_amount > 0) v.tip_pct = 0; else if (p_tip_pct != null) v.tip_pct = Math.max(0, Math.min(+p_tip_pct, 30));
       if (p_guests >= 1) v.guests = +p_guests;
-      if (was.split !== v.split || was.tip !== v.tip_pct) log("bill_changed", (db.tables.find(t => t.id === v.table_id) || {}).code + " · split " + was.split + "→" + v.split + " · tip " + was.tip + "%→" + v.tip_pct + "%");
+      if (was.split !== v.split || was.tip !== tipWord()) log("bill_changed", (db.tables.find(t => t.id === v.table_id) || {}).code + " · split " + was.split + "→" + v.split + " · tip " + was.tip + "→" + tipWord());
       save(); return bill(v.id); },
     staff_mark_paid({ p_visit, p_method, p_reference }){ need(isFloor()); if (!["upi", "cash", "card", "mixed"].includes(p_method)) err("Pick how they paid.");
       const v = db.visits.find(x => x.id === p_visit); if (!v || !["open", "bill"].includes(v.status)) err("This bill is already closed.");

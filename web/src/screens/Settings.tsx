@@ -125,7 +125,8 @@ export function SettingsScreen() {
             <Field label="UPI ID" hint="e.g. yourname@okicici"><Input value={s.upi_id} maxLength={60} onChange={e => set("upi_id", e.target.value)} /></Field>
             <Field label="Name on UPI" hint="What the guest's UPI app shows"><Input value={s.upi_name} maxLength={60} onChange={e => set("upi_name", e.target.value)} /></Field>
           </div>
-          {([["pay_upi", "UPI"], ["pay_card", "Card"], ["pay_cash", "Cash"]] as const).map(([k, l]) => (
+          {s.pay_upi && !s.upi_id.trim() && <p role="status" className="rounded-[var(--radius)] bg-warning-soft px-3 py-2 text-[13px] font-semibold text-warning-strong">Guests won&apos;t see UPI until you add your UPI ID above.</p>}
+          {([["pay_upi", "UPI / QR"], ["pay_card", "Card"], ["pay_cash", "Cash"]] as const).map(([k, l]) => (
             <label key={k} className="flex items-center justify-between rounded-[var(--radius)] border border-border p-3">
               <span className="text-sm font-semibold text-fg">Guests can choose {l}</span><Switch checked={s[k]} onChange={v => set(k, v)} label={`Accept ${l}`} />
             </label>

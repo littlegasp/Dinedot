@@ -6,7 +6,7 @@ import { Badge, Card, EmptyState, Input, Segmented, Skeleton } from "@/component
 import { Sheet, toast } from "@/components/ui/overlay";
 import { rpc } from "@/lib/api";
 import type { BillRow } from "@/lib/types";
-import { cn, inr } from "@/lib/utils";
+import { cn, inr, tipLabel } from "@/lib/utils";
 import { ReceiptDialog } from "./ReceiptDialog";
 
 const ist = (d: Date) => new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);   // the database counts days in India time
@@ -87,7 +87,7 @@ export function BillsScreen() {
                 v={`− ${inr(open.bill.discount!, { paise: true })}`} />}
               {open.bill.service > 0 && <Row k={`Service ${open.bill.service_pct}%`} v={inr(open.bill.service, { paise: true })} />}
               <Row k={`GST ${open.bill.gst_pct}%`} v={inr(open.bill.gst, { paise: true })} />
-              {open.bill.tip > 0 && <Row k={`Tip ${open.bill.tip_pct}%`} v={inr(open.bill.tip)} />}
+              {open.bill.tip > 0 && <Row k={tipLabel(open.bill)} v={inr(open.bill.tip)} />}
               <div className="flex justify-between pt-1 text-base font-extrabold"><dt className="text-fg">Total</dt><dd className="num text-fg">{inr(open.bill.grand)}</dd></div>
             </dl>
             <dl className="grid gap-1 rounded-[var(--radius)] bg-muted p-3 text-[13px]">

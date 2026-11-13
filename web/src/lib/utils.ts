@@ -1,6 +1,9 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+/** "Tip 10%", or just "Tip" when it was given as an amount. */
+export const tipLabel = (b: { tip_pct: number; tip_amount?: number }) => (b.tip_amount ?? 0) > 0 || !b.tip_pct ? "Tip" : `Tip ${b.tip_pct}%`;
+
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
 /** Display money. Authoritative amounts always come from the database; this only formats. */

@@ -5,13 +5,13 @@ Restaurant system: guests scan a table QR, order, see live status, get the Wi-Fi
 
 ## Where things are
 - `web/` — the app: Next.js 15 + TypeScript + Tailwind 4, static export. `index.html` = staff app (hash routes `#/today #/pos?table=… #/floor #/kitchen #/bills #/menu #/tables #/team #/settings #/help #/design`), `t.html?k=<token>` = guest page (the QR codes point here). Keys: `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_KEY` (publishable key only); empty = demo.
-- `supabase/migrations/` — schema, security and every function, run in order (0001 … 0008). `supabase/sample_menu.sql` optional sample data. `supabase/functions/team-admin/` and `supabase/functions/push/` — edge functions (deploy via the Supabase editor, Verify JWT off).
+- `supabase/migrations/` — schema, security and every function, run in order (0001 … 0009). `supabase/sample_menu.sql` optional sample data. `supabase/functions/team-admin/` and `supabase/functions/push/` — edge functions (deploy via the Supabase editor, Verify JWT off).
 - `docs/` — `PRODUCT_DEFINITION.md` (decisions, status), `BACKUPS.md`, older audit/plan notes.
 - The old static app (staff.html, guest.js…) was retired 11 Nov 2026: files removed, its GitHub Pages site (littlegasp.com/Dinedot) unpublished with source None. Branch `main` still holds it as an archive; **`dineos` is the default branch** and the production branch.
 
 ## Live
 - App: https://dineos.littlegasp-orders.workers.dev — Cloudflare account littlegasp.orders, Workers project `dineos`, **static assets only** (`web/wrangler.jsonc`, `web/public/_headers`), production branch `dineos`; build `npm run build`, deploy `npx wrangler deploy`, root `web`. No Worker code (keeps the free plan's 10 ms limit irrelevant); server logic goes in Supabase.
-- Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), sign-ups off. Migrations run on live: 0001–0005 (11 Nov 2026), 0006, 0007 and 0008 (13 Nov 2026). Edge functions `team-admin` and `push` deployed (Verify JWT off); `push` deployed 13 Nov 2026. team-admin with the existing-login change deployed 11 Nov 2026.
+- Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), sign-ups off. Migrations run on live: 0001–0005 (11 Nov 2026), 0006, 0007 and 0008 (13 Nov 2026); 0009 see PRODUCT_DEFINITION status. Edge functions `team-admin` and `push` deployed (Verify JWT off); `push` deployed 13 Nov 2026. team-admin with the existing-login change deployed 11 Nov 2026.
 - Never put the service/secret key or database password in the repo or chat. Run a migration on live only after the owner's go-ahead; publish an app change only after its migration is live.
 
 ## Database rules
@@ -24,6 +24,7 @@ Restaurant system: guests scan a table QR, order, see live status, get the Wi-Fi
 - 0006: bill details in settings (`legal_name`, `bill_address`, `gstin`, `fssai`, `sac` 996331, `gst_composition`, `invoice_prefix` ≤5, `bill_footer`, `receipt_width` 58|80) via `owner_save_bill_settings`; composition forbids GST > 0 (trigger). `pay_visit` sets `visits.invoice_no` = prefix + FY code (`fy_code`: 2627 = Apr 26–Mar 27) + `-` + 4-digit running number (`restaurants.last_invoice_no`, row lock, restarts each FY, ≤16 chars, unique per restaurant). `receipt_json` (internal) → `staff_receipt` (floor) and `guest_state.last_paid.receipt` (no staff name). Cashier role.
 - 0007: floor plan (`dining_tables.plan_x` 0–1000, `plan_y` 0–640 = table centre, `shape` square|round|long; `owner_save_plan` (manager); an area change unplaces the table; `staff_live` tables carry `x`, `y`, `shape`). Phone alerts: `push_subs` (per device, cascade), `staff_push_subscribe`/`unsubscribe`; triggers on orders (new, ready) and calls → `push_send` → `net.http_post` (pg_net) to the `push` function with `push_config.hook_secret`; `push_hook` (service role) picks title/body/recipients by role (kitchen: new orders; cashier/waiter: ready; owner/manager/cashier/waiter: calls); VAPID keys made by the function and kept in `push_config`. Removing a member drops their phones.
 - 0008: `areas` (per restaurant: name unique ignoring case, `sort`, room `shape` wide 1000×640 | square 640×640 | long 1000×400 via `area_room()`, `marks` jsonb [{k entrance|counter|kitchen|washroom|window|stairs|pillar, x, y}] ≤40). Tables keep the area's name in `dining_tables.area`; trigger `b_area` (after `a_restaurant_id`) tidies spaces, uses the existing spelling ignoring case, or adds the area. `owner_save_area` (add/rename — renames its tables — /room shape, pulls places inside a smaller room), `owner_delete_area` (only when empty), `owner_sort_areas`, `owner_save_room` (a room's table places + markers at once; manager). `staff_live.areas` in order.
+- 0009: tip as an amount: `visits.tip_amount` (>0 wins over `tip_pct`; one clears the other); `visit_bill` returns `tip_amount`; `guest_bill(…, p_tip_amount default 0)` (≤ the bill), `staff_visit_update(…, p_tip_amount default null)` (a new % clears it). Old 4-argument versions dropped. Guest bill sheet previews the total live (tip % of net, rounded; split rounded up) and shows a UPI QR with the amount (`upi://pay`).
 
 ## App
 - Data: `src/lib/api.ts` (fetch + session; `rpc` throws an offline error at once when `navigator.onLine` is false), `src/lib/staff.tsx` (staff_me, staff_restaurants, staff_live every 4 s, `useAction`), shapes in `src/lib/types.ts`, screens in `src/screens/`, shell in `src/components/shell/` (AppShell, Tour).
@@ -40,7 +41,7 @@ Restaurant system: guests scan a table QR, order, see live status, get the Wi-Fi
 - Guest privacy (DPDP): never ask guests for name, phone or email; no tracking scripts.
 
 ## Tests (CI `.github/workflows/test.yml` runs all on every push; don't publish a red commit)
-- `supabase/test/run.sh` (local Postgres; PGHOST/PGUSER/PGPASSWORD) → `ALL TESTS PASSED`, `0003 … 0008 TESTS PASSED`, `RACE TEST PASSED`. Add each new migration to `MIG` in `run.sh` and give it a `test_000N.sql`.
+- `supabase/test/run.sh` (local Postgres; PGHOST/PGUSER/PGPASSWORD) → `ALL TESTS PASSED`, `0003 … 0009 TESTS PASSED`, `RACE TEST PASSED`. Add each new migration to `MIG` in `run.sh` and give it a `test_000N.sql`.
 - `cd web && npm run build && (cd out && python3 -m http.server 8792 &) && node tests/journey.mjs` (and `WIDTH=390`) → `DINEOS JOURNEY PASSED`.
 - `web/tests/real/run.sh` (Postgres + `POSTGREST=` v12 binary) runs the built app against the real migrations → `REAL STACK PASSED`. It rebuilds `web/out` with test keys: rebuild with `npm run build` before demo screenshots.
 

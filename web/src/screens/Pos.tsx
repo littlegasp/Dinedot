@@ -8,7 +8,7 @@ import { TableStatus, tableState, visitLabel, visitOf } from "@/components/ui/st
 import { newRequestId, rpc } from "@/lib/api";
 import { useAction, useStaff } from "@/lib/staff";
 import type { Bill, CartLine, LiveVisit, MenuItem, PayPart, StaffMenu } from "@/lib/types";
-import { cn, inr } from "@/lib/utils";
+import { cn, inr, tipLabel } from "@/lib/utils";
 import { ReceiptDialog } from "./ReceiptDialog";
 import { celebrate } from "@/lib/motion";
 import { enqueue, isOffline, useOutbox } from "@/lib/outbox";
@@ -209,7 +209,7 @@ export function PosScreen({ tableId, setTableId, payNow }: { tableId: string | n
                 v={`− ${inr(visit.bill.discount!, { paise: true })}`} />}
               {visit.bill.service > 0 && <Row k={`Service ${visit.bill.service_pct}%`} v={inr(visit.bill.service, { paise: true })} />}
               <Row k={`GST ${visit.bill.gst_pct}%`} v={inr(visit.bill.gst, { paise: true })} />
-              {visit.bill.tip > 0 && <Row k={`Tip ${visit.bill.tip_pct}%`} v={inr(visit.bill.tip)} />}
+              {visit.bill.tip > 0 && <Row k={tipLabel(visit.bill)} v={inr(visit.bill.tip)} />}
             </dl>
           )}
           <div className="flex items-baseline justify-between border-t border-dashed border-border pt-3">
@@ -294,8 +294,10 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open
   React.useEffect(() => { if (method === "split" && parts.length === 0) {
     const half = Math.ceil(b.grand / 2); setParts([{ method: "upi", amount: String(half), reference: "" }, { method: "cash", amount: String(b.grand - half), reference: "" }]); } }, [method, parts.length, b.grand]);
   const kitchen = visit.kind === "dine_in" && visit.orders.some(o => o.status === "new" || o.status === "cooking");
+  const amountTip = (b.tip_amount ?? 0) > 0;
   const update = (p: { p_split?: number; p_tip_pct?: number }) =>
-    run(() => rpc("staff_visit_update", { p_visit: visit.id, p_split: p.p_split ?? visit.split, p_tip_pct: p.p_tip_pct ?? visit.tip_pct, p_guests: visit.guests }));
+    run(() => rpc("staff_visit_update", { p_visit: visit.id, p_split: p.p_split ?? visit.split, p_tip_pct: p.p_tip_pct ?? visit.tip_pct, p_guests: visit.guests,
+      ...(p.p_tip_pct != null ? { p_tip_amount: 0 } : {}) }));
   const partSum = Math.round(parts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100;
   const left = Math.round((b.grand - partSum) * 100) / 100;
   const setPart = (i: number, x: Partial<Part>) => setParts(ps => ps.map((p, j) => j === i ? { ...p, ...x } : p));
@@ -321,7 +323,8 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open
               {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? "One bill" : `${n} ways`}</option>)}
             </select></label>
           <label className="grid gap-1"><span className="font-semibold text-fg">Tip</span>
-            <select value={visit.tip_pct} disabled={pending} onChange={e => update({ p_tip_pct: +e.target.value })} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-fg">
+            <select value={amountTip ? "amt" : visit.tip_pct} disabled={pending} onChange={e => { if (e.target.value !== "amt") update({ p_tip_pct: +e.target.value }); }} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-fg">
+              {amountTip && <option value="amt">{inr(b.tip)} (guest)</option>}
               {[0, 5, 10, 15, 20].map(n => <option key={n} value={n}>{n ? `${n}%` : "No tip"}</option>)}
             </select></label>
         </div>

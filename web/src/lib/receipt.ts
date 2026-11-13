@@ -64,7 +64,7 @@ export function receiptHtml(r: Receipt): string {
     ${!p.composition && b.gst > 0 ? row("Taxable value", money(r.taxable)) + row(`CGST ${half}%`, money(r.cgst)) + row(`SGST ${half}%`, money(r.sgst)) : ""}
     ${Math.abs(roundOff) >= 0.01 ? row("Round off", (roundOff > 0 ? "+" : "") + money(roundOff)) : ""}
     ${row("Total", "₹" + money(b.total), "big line")}
-    ${b.tip > 0 ? row(`Tip ${b.tip_pct}% (not taxed)`, money(b.tip)) + row("Amount paid", "₹" + money(b.grand), "b") : ""}
+    ${b.tip > 0 ? row(`${(b.tip_amount ?? 0) > 0 || !b.tip_pct ? "Tip" : `Tip ${b.tip_pct}%`} (not taxed)`, money(b.tip)) + row("Amount paid", "₹" + money(b.grand), "b") : ""}
   </table>
   ${r.payments.length ? `<hr><table class="s">${r.payments.map(x => row(`Paid by ${METHOD[x.method] ?? x.method}${x.reference ? ` · ${esc(x.reference)}` : ""}`, money(x.amount))).join("")}</table>` : ""}
   <hr>

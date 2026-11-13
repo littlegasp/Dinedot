@@ -78,6 +78,24 @@ try {
   await staff.getByRole("group", { name: "Main floor plan" }).waitFor();
   await staff.getByRole("button", { name: /^T3, (Ordered|Eating)/ }).waitFor();
   ok("floor plan shows T3 with its live state");
+  // Guest: the total updates with the tip base0 asking; a tip can be an amount; UPI shows a QR with the amount
+  await guest.getByRole("button", { name: "Bill", exact: true }).click();
+  const gb = guest.getByRole("dialog", { name: "Your bill" });
+  const money = async () => Number((await gb.getByTestId("bill-total").textContent()).replace(/[^\d.]/g, ""));
+  const base0 = await money();
+  await gb.getByRole("button", { name: "₹ Amount" }).click();
+  await gb.getByLabel("Tip amount").fill("50");
+  if (await money() !== base0 + 50) throw new Error(`total didn't add the ₹50 tip: ${base0} → ${await money()}`);
+  await gb.getByRole("button", { name: "2", exact: true }).click();
+  await gb.getByText(/2 ways/).waitFor();
+  await gb.getByRole("button", { name: "UPI / QR" }).click();
+  await gb.getByRole("button", { name: new RegExp("Ask for the bill · ₹" + Math.ceil((base0 + 50) / 2).toLocaleString("en-IN") + " each") }).click();
+  await gb.getByText("A waiter is bringing your bill.").waitFor();
+  await gb.getByRole("img", { name: "UPI QR code with the amount" }).waitFor();
+  const upi = await gb.getByRole("link", { name: /Pay ₹.* by UPI/ }).getAttribute("href");
+  if (!upi.startsWith("upi://pay?") || !upi.includes("am=" + Math.ceil((base0 + 50) / 2))) throw new Error("UPI link: " + upi);
+  await guest.keyboard.press("Escape");
+  ok("guest: the total shows the ₹50 tip before asking; bill asked split 2 ways by UPI, with the pay link and QR for " + Math.ceil((base0 + 50) / 2));
   await staff.getByRole("button", { name: /^T3/ }).first().click();
   const sheet = staff.getByRole("dialog");
   while (await sheet.getByRole("button", { name: "Served" }).count()) { await sheet.getByRole("button", { name: "Served" }).first().click(); await staff.waitForTimeout(400); }

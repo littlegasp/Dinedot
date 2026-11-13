@@ -18,6 +18,8 @@ export type Bill = {
   lines: { name: string; size: string; addons: string[]; qty: number; amount: number }[];
   subtotal: number; service: number; gst: number; tip: number; total: number; grand: number;
   split: number; each: number; tip_pct: number; service_pct: number; gst_pct: number;
+  /* 0009: a tip given as an amount (0 = the tip is tip_pct %) */
+  tip_amount?: number;
   /* 0005: discount comes off the subtotal before service, GST and tip */
   discount?: number; discount_kind?: "pct" | "amount" | null; discount_value?: number; discount_reason?: string;
   payments?: { method: PayMethod; amount: number; reference: string }[];   // paid bills only
