@@ -14,7 +14,11 @@ export function Glide({ selector, watch, className }: { selector: string; watch:
     if (!host) return;
     const place = () => {
       const on = host.querySelector<HTMLElement>(selector);
-      setBox(on ? { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight } : null);
+      if (!on) { setBox(null); return; }
+      // measured against the box itself (offsetLeft would be relative to the nearest positioned parent,
+      // e.g. the tab's own button, and leave the highlight stuck on the first tab)
+      const h = host.getBoundingClientRect(), r = on.getBoundingClientRect();
+      setBox({ x: r.left - h.left - host.clientLeft + host.scrollLeft, y: r.top - h.top - host.clientTop + host.scrollTop, w: r.width, h: r.height });
     };
     place();
     const t = setTimeout(() => setReady(true), 60);   // no fly-in from the corner on first draw

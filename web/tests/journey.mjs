@@ -191,6 +191,15 @@ try {
 
   // ---- Manage screens (owner) ----
   const nav = async (route) => { await staff.goto(BASE + "#/" + route); await staff.waitForTimeout(300); };
+  if (W < 1024) {   // phone tab bar: the highlight sits under the tab of the screen you're on
+    for (const [route, label] of [["kitchen", "Kitchen"], ["floor", "Floor"], ["today", "Today"]]) {
+      await nav(route); await staff.waitForTimeout(500);
+      const bar = staff.getByRole("navigation", { name: "Main" });
+      const pill = await bar.locator(".glide").boundingBox(), tab = await bar.getByRole("button", { name: new RegExp(label + "$") }).first().boundingBox();
+      if (!pill || !tab || Math.abs(pill.x + pill.width / 2 - (tab.x + tab.width / 2)) > 4) throw new Error(`tab highlight isn't under ${label}: ${JSON.stringify({ pill, tab })}`);
+    }
+    ok("phone tab bar: the highlight follows the screen (Kitchen, Floor, Today)");
+  }
   await nav("menu");
   await staff.getByRole("heading", { name: "Menu", exact: true }).waitFor();
   await staff.getByRole("button", { name: "Add dish" }).click();
