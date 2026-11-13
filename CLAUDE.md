@@ -11,7 +11,7 @@ Restaurant system: guests scan a table QR, order, see live status, get the Wi-Fi
 
 ## Live
 - App: https://dineos.littlegasp-orders.workers.dev — Cloudflare account littlegasp.orders, Workers project `dineos`, **static assets only** (`web/wrangler.jsonc`, `web/public/_headers`), production branch `dineos`; build `npm run build`, deploy `npx wrangler deploy`, root `web`. No Worker code (keeps the free plan's 10 ms limit irrelevant); server logic goes in Supabase.
-- Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), sign-ups off. Migrations run on live: 0001–0005 (11 Nov 2026), 0006 and 0007 (13 Nov 2026); 0008 see PRODUCT_DEFINITION status. Edge functions `team-admin` and `push` deployed (Verify JWT off); `push` deployed 13 Nov 2026. team-admin with the existing-login change deployed 11 Nov 2026.
+- Supabase: org DineOS, project `dineos` (ref amthbdgwonzgesxrphxc, Mumbai), sign-ups off. Migrations run on live: 0001–0005 (11 Nov 2026), 0006, 0007 and 0008 (13 Nov 2026). Edge functions `team-admin` and `push` deployed (Verify JWT off); `push` deployed 13 Nov 2026. team-admin with the existing-login change deployed 11 Nov 2026.
 - Never put the service/secret key or database password in the repo or chat. Run a migration on live only after the owner's go-ahead; publish an app change only after its migration is live.
 
 ## Database rules
