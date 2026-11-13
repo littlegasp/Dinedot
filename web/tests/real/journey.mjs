@@ -145,7 +145,8 @@ try {
   if (sql("select count(*) from activity_log where action = 'discount' and detail like 'Token 1 · %Regular guest'") !== "1") throw new Error("discount not logged");
   ok("discount (logged) and a split payment saved as two payments rows that add up");
   await s.goto(BASE + "#/kitchen"); await s.getByRole("radio", { name: "Tandoor" }).click();
-  const tk = s.locator("article", { hasText: "Token 1" }).first();
+  await s.locator("article", { hasText: "Token 1" }).first().getByRole("button", { name: "Start cooking" }).click();
+  const tk = s.locator("section[aria-label=cooking] article", { hasText: "Token 1" });
   await tk.getByRole("button", { name: /Paneer Tikka/ }).click();
   await s.locator("section[aria-label=ready] article", { hasText: "Token 1" }).waitFor();
   if (sql("select o.status || '|' || (oi.done_at is not null)::text from order_items oi join orders o on o.id = oi.order_id join visits v on v.id = o.visit_id where v.kind = 'takeaway'") !== "ready|true")
