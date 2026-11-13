@@ -14,6 +14,7 @@ import type { LiveTable, OrderStatus } from "@/lib/types";
 import { cn, inr, minsAgo } from "@/lib/utils";
 
 const ORDER_TONE: Record<OrderStatus, "coral" | "warning" | "success" | "neutral"> = { new: "coral", cooking: "warning", ready: "success", served: "neutral", cancelled: "neutral" };
+const PAY_WORD: Record<string, string> = { upi: "Pays by UPI / QR", card: "Pays by card", cash: "Pays in cash" };
 const CALL_SHORT = { waiter: "Waiter!", water: "Water!", bill: "Bill!", help: "Help!" } as const;
 const ORDER_WORD: Record<OrderStatus, string> = { new: "New", cooking: "Cooking", ready: "Ready to serve", served: "Served", cancelled: "Cancelled" };
 
@@ -69,7 +70,9 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
             <div key={c.id} className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-coral/40 bg-coral-soft p-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-full bg-coral text-[#171b24]"><I className="size-5" aria-hidden /></span>
               <div className="min-w-0 flex-1"><p className="font-display text-base font-extrabold text-fg">{code(c.table_id)} {CALL_LABEL[c.kind]}</p>
-                <p className="text-[12px] text-fg-2">{minsAgo(minutesSince(c.at))}{c.seen_by ? ` · ${c.seen_by} saw it` : ""}</p></div>
+                <p className="text-[12px] text-fg-2">{minsAgo(minutesSince(c.at))}{c.seen_by ? ` · ${c.seen_by} saw it` : ""}</p>
+                {c.kind === "bill" && (() => { const bv = live.visits.find(v => v.table_id === c.table_id && v.status === "bill"); return bv && (
+                  <p className="mt-0.5 text-[13px] font-semibold text-fg">{bv.pay_choice ? PAY_WORD[bv.pay_choice] : "Bill"} · {inr(bv.bill.grand)}{bv.bill.split > 1 ? ` · ${bv.bill.split} ways (${inr(bv.bill.each)} each)` : ""}{bv.bill.tip > 0 ? ` · incl. tip ${inr(bv.bill.tip)}` : ""}</p>); })()}</div>
               <Button variant="ink" disabled={pending} onClick={() => run(() => rpc("staff_call", { p_call: c.id, p_action: "done" }), `${code(c.table_id)} handled`)}><Check />Done</Button>
             </div>
           ); })}
@@ -113,6 +116,7 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
         ) : (
           <div className="grid gap-4">
             <div className="flex items-center gap-2"><TableStatus state={tableState(ov)} /><span className="text-[13px] text-fg-2">open {minsAgo(minutesSince(ov.opened_at))}</span></div>
+            {ov.status === "bill" && ov.pay_choice && <p className="rounded-[var(--radius)] bg-blue-soft px-3 py-2 text-[13px] font-semibold text-fg">{PAY_WORD[ov.pay_choice]} · {inr(ov.bill.grand)}{ov.bill.split > 1 ? ` · ${ov.bill.split} ways` : ""}{ov.bill.tip > 0 ? ` · incl. tip ${inr(ov.bill.tip)}` : ""}</p>}
             {ov.approved === false && (
               <div className="grid gap-2 rounded-[var(--radius)] bg-warning-soft p-3">
                 <p className="text-sm font-semibold text-warning-strong">This table&apos;s first order is waiting for your OK. Accept it if someone is sitting here.</p>

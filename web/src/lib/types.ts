@@ -51,7 +51,9 @@ export type Live = {
   now: string; role: Role; restaurant_id?: string;
   settings: { name: string; currency: string; accepting: boolean; gst_pct: number; service_pct: number; upi_id: string; upi_name: string;
     stations: string[]; max_discount_pct: number; notice: { text: string; at: string; by: string } | null; day_closed: boolean;
-    approve_tables?: boolean };
+    approve_tables?: boolean;
+    /* 0011: the same choices the guest's phone shows */
+    tip_options?: number[]; pay?: { upi: boolean; card: boolean; cash: boolean } };
   tables: LiveTable[]; areas?: LiveArea[]; visits: LiveVisit[]; calls: LiveCall[];
   today: { sales: number; bills: number; orders: number; guests: number; rating: number | null; flow: Record<string, number> };
 };

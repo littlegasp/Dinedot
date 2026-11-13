@@ -147,7 +147,16 @@ export function FloorPlan({ area, tables, info, onOpen, edit, spots, onMove, sel
           const sel = selected === t.id;
           const hd = handlers(t.id, s, p => onMove?.(t.id, p), () => onOpen(t), 50);
           return (
-            <g key={t.id} transform={`translate(${s.x} ${s.y})`} role="button" tabIndex={0}
+            <React.Fragment key={t.id}>
+            {/* the pulse sits outside the table's button, so the button itself never moves */}
+            {inf.ping && (
+              <g transform={`translate(${s.x} ${s.y})`} aria-hidden="true" pointerEvents="none">
+                {shape === "round"
+                  ? <circle r={w / 2 + 8} fill="none" stroke="var(--coral)" strokeWidth="3" className="plan-ping" />
+                  : <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} rx="20" fill="none" stroke="var(--coral)" strokeWidth="3" className="plan-ping" />}
+              </g>
+            )}
+            <g transform={`translate(${s.x} ${s.y})`} role="button" tabIndex={0}
               aria-label={`${t.code}, ${inf.word}${inf.sub ? `, ${inf.sub}` : ""}, ${t.seats} seats${edit ? ". Drag, or use the arrow keys, to move it" : ""}`}
               className={cn("plan-table outline-none", edit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
               {...hd} onClick={() => { if (!edit) onOpen(t); }}>
@@ -158,13 +167,11 @@ export function FloorPlan({ area, tables, info, onOpen, edit, spots, onMove, sel
               {shape === "round"
                 ? <circle r={w / 2} fill={tone.fill} stroke={tone.stroke} strokeWidth={sel ? 5 : 3} />
                 : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx="14" fill={tone.fill} stroke={tone.stroke} strokeWidth={sel ? 5 : 3} />}
-              {inf.ping && (shape === "round"
-                ? <circle r={w / 2 + 8} fill="none" stroke="var(--coral)" strokeWidth="3" className="plan-ping" />
-                : <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} rx="20" fill="none" stroke="var(--coral)" strokeWidth="3" className="plan-ping" />)}
               <text y={inf.sub ? -4 : 7} textAnchor="middle" fontSize={w < 80 ? 19 : 22} fontWeight="800" fill="var(--text)" style={{ fontFamily: "var(--font-display)" }}>{t.code}</text>
               <text y={inf.sub ? 16 : 26} textAnchor="middle" fontSize={w < 80 ? 11 : 13} fontWeight="700" fill={tone.text}>{inf.word}</text>
               {inf.sub && <text y={33} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">{inf.sub}</text>}
             </g>
+            </React.Fragment>
           );
         })}
       </svg>

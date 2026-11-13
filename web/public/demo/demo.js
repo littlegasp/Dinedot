@@ -391,7 +391,8 @@ const Demo = (() => {
       return { now: now(), role: role(),
         settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name,
           stations: s.stations || [], max_discount_pct: s.max_discount_pct ?? 20,
-          notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed(), approve_tables: !!s.approve_tables },
+          notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed(), approve_tables: !!s.approve_tables,
+          tip_options: s.tip_options, pay: { upi: !!(s.pay_upi && s.upi_id), card: !!s.pay_card, cash: !!s.pay_cash } },
         areas: db.areas.slice().sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)).map(a => ({ id: a.id, name: a.name, shape: a.shape, marks: a.marks })),
         tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active, x: t.x ?? null, y: t.y ?? null, shape: t.shape || "square" })),
         visits: db.visits.filter(v => v.status === "open" || v.status === "bill" || (v.kind === "takeaway" && v.status === "paid"

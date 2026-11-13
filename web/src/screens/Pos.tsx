@@ -275,15 +275,22 @@ function Picker({ i, onAdd }: { i: MenuItem; onAdd: (s?: { name: string; price: 
 
 type Single = "upi" | "card" | "cash";
 const METHODS: { m: Single | "split"; label: string; Icon: typeof Smartphone }[] = [
-  { m: "upi", label: "UPI", Icon: Smartphone }, { m: "card", label: "Card", Icon: CreditCard },
+  { m: "upi", label: "UPI / QR", Icon: Smartphone }, { m: "card", label: "Card", Icon: CreditCard },
   { m: "cash", label: "Cash", Icon: Banknote }, { m: "split", label: "Split", Icon: Layers },
 ];
-const LABEL: Record<Single, string> = { upi: "UPI", card: "Card", cash: "Cash" };
+const LABEL: Record<Single, string> = { upi: "UPI / QR", card: "Card", cash: "Cash" };
 const amt = (s: string) => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 type Part = { method: Single; amount: string; reference: string };
 
 function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open: boolean; onOpenChange: (o: boolean) => void; visit: LiveVisit; label: string; canEdit: boolean; onPaid: (visitId: string) => void }) {
   const { run, pending } = useAction();
+  const { live } = useStaff();
+  // the same methods and tip choices as the guest's phone (Settings); a method the guest already picked always shows
+  const on = live?.settings.pay;
+  const methods = METHODS.filter(x => x.m === "split" || !on || !(on.upi || on.card || on.cash) || on[x.m] || visit.pay_choice === x.m);
+  const shown = methods.filter(x => x.m !== "split").length > 1 ? methods : methods.filter(x => x.m !== "split");
+  const tipChoices = live?.settings.tip_options?.length ? live.settings.tip_options : [0, 5, 10];
+  const [tipAmt, setTipAmt] = React.useState<string | null>(null);
   const [method, setMethod] = React.useState<Single | "split">("upi");
   const [ref, setRef] = React.useState("");
   const [given, setGiven] = React.useState("");
@@ -316,6 +323,11 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open
         {(b.discount ?? 0) > 0 && <p className="num text-right text-[13px] text-fg-2">includes {inr(b.discount!, { paise: true })} discount</p>}
         {b.split > 1 && <p className="num text-right text-[13px] text-fg-2">{b.split} ways · {inr(b.each)} each</p>}
       </div>
+      {visit.pay_choice && (
+        <p className="mt-2 rounded-[var(--radius)] bg-blue-soft px-3 py-2 text-[13px] font-semibold text-fg">
+          The guest chose {LABEL[visit.pay_choice as Single]}{b.tip > 0 ? ` · tip ${inr(b.tip)}` : ""}{b.split > 1 ? ` · ${b.split} ways` : ""} on their phone.
+        </p>
+      )}
       {canEdit && visit.kind === "dine_in" && (
         <div className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
           <label className="grid gap-1"><span className="font-semibold text-fg">Split</span>
@@ -323,14 +335,24 @@ function PayDialog({ open, onOpenChange, visit, label, canEdit, onPaid }: { open
               {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? "One bill" : `${n} ways`}</option>)}
             </select></label>
           <label className="grid gap-1"><span className="font-semibold text-fg">Tip</span>
-            <select value={amountTip ? "amt" : visit.tip_pct} disabled={pending} onChange={e => { if (e.target.value !== "amt") update({ p_tip_pct: +e.target.value }); }} className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-fg">
-              {amountTip && <option value="amt">{inr(b.tip)} (guest)</option>}
-              {[0, 5, 10, 15, 20].map(n => <option key={n} value={n}>{n ? `${n}%` : "No tip"}</option>)}
+            <select value={tipAmt != null ? "new" : amountTip ? "amt" : visit.tip_pct} disabled={pending}
+              onChange={e => { const v = e.target.value; if (v === "new") setTipAmt(""); else if (v !== "amt") { setTipAmt(null); update({ p_tip_pct: +v }); } }}
+              className="h-10 rounded-[var(--radius)] border border-border bg-surface px-2 text-fg">
+              {amountTip && <option value="amt">{inr(b.tip)}</option>}
+              {(tipChoices.includes(visit.tip_pct) || amountTip ? tipChoices : [...tipChoices, visit.tip_pct].sort((x, y) => x - y)).map(n => <option key={n} value={n}>{n ? `${n}%` : "No tip"}</option>)}
+              <option value="new">₹ Amount…</option>
             </select></label>
+          {tipAmt != null && (
+            <form className="col-span-2 flex gap-2" onSubmit={e => { e.preventDefault(); const a = Math.round(Number(tipAmt) || 0);
+                run(() => rpc("staff_visit_update", { p_visit: visit.id, p_split: visit.split, p_tip_pct: 0, p_guests: visit.guests, p_tip_amount: a }).then(() => true), a ? `Tip ${inr(a)} added` : "Tip removed").then(ok => { if (ok) setTipAmt(null); }); }}>
+              <Input aria-label="Tip amount" inputMode="numeric" autoFocus placeholder="e.g. 50" value={tipAmt} onChange={e => setTipAmt(e.target.value.replace(/\D/g, "").slice(0, 5))} />
+              <Button type="submit" disabled={pending}>Set tip</Button>
+            </form>
+          )}
         </div>
       )}
-      <div className="mt-4 grid grid-cols-4 gap-2">
-        {METHODS.map(({ m, label, Icon }) => (
+      <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}>
+        {shown.map(({ m, label, Icon }) => (
           <button key={m} aria-pressed={method === m} onClick={() => setMethod(m)}
             className={cn("flex h-16 flex-col items-center justify-center gap-1 rounded-[var(--radius)] border border-border text-sm font-semibold text-fg", method === m && "border-blue bg-blue-soft ring-1 ring-blue")}>
             <Icon className="size-5" aria-hidden />{label}

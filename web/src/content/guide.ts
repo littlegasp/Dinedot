@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Take payment now offers the same choices the guest sees: your tip choices from Settings plus ₹ Amount, and only the payment methods you accept (UPI / QR, Card, Cash). When a table asks for the bill, Floor and the phone alert say how they'll pay, the total, the split and the tip, so you bring the card machine, change or nothing at all." },
   { date: "13 Nov 2026", text: "Only people at the table can order. A table's first order now waits on Floor (\"T5 wants to order\") until a waiter glances at the table and taps Accept; Deny turns it down. The first phone then shows a 4-digit table code, and friends at the table type it to order from their phones. The code stops working when the bill is paid, so a photo of the QR or a shared link can't be used from home. Switch it off in Settings → Who can order." },
   { date: "13 Nov 2026", text: "Guest bill: the total updates as guests pick a tip or split, before they tap Ask for the bill. Besides the % choices they can type a tip in rupees (₹ Amount). Paying by UPI / QR opens their UPI app with the amount filled in, and shows a QR with the amount for paying from another phone. UPI shows only when your UPI ID is set in Settings." },
   { date: "13 Nov 2026", text: "Kitchen: dishes can be ticked off only once the order is Cooking, so tapping a dish on a New order no longer sends it straight to Ready. Tap Start cooking first." },
@@ -62,7 +63,8 @@ export const GUIDE: Record<Route, Section> = {
       "Pick the table at the top. A coloured dot shows if it's free (grey), ordered (amber), eating (green) or asking for the bill (coral).",
       "Tap dishes to add them. Dishes with sizes or extras ask you to choose first.",
       "Add a note for the kitchen if needed, then tap Send.",
-      "A guest's tip shows on the bill: a % they picked, or an amount they typed (shown as ₹50 (guest) under Tip). Picking a % there replaces it.",
+      "The tip choices are the same as on the guest's phone (Settings → tip choices) plus ₹ Amount. A tip the guest typed shows as its amount under Tip; picking another choice replaces it.",
+      "Take payment shows only the methods you accept (Settings → Payments), plus Split. If the guest already chose one on their phone, it is picked for you and named at the top.",
       "When the guests are ready to pay, tap Take payment. Choose UPI, Card or Cash, type the UPI or card reference if you have it, and tap Mark paid.",
       "Paying in parts (some UPI, the rest cash)? Tap Split. Set the method and amount of each part, or tap Add a payment. Mark paid works once the parts add up to the bill.",
       "Takeaway: tap Takeaway at the start of the table list, add dishes and tap Send. The order gets a token number; tell the guest their token. The token stays at the top until it's handed over.",
@@ -81,6 +83,7 @@ export const GUIDE: Record<Route, Section> = {
       "A new table's first order shows at the very top as \"T5 wants to order\". Glance at the table: if someone is sitting there, tap Accept and the order goes to the kitchen. If nobody is there (someone ordering from a photo of the QR), tap Deny: the order is cancelled.",
       "Tap a table to see its 4-digit table code. Guests who join later type it on their phone; tell them if they ask. New code makes a fresh one (old phones at the table stay in).",
       "Calls from tables (waiter, water, bill) show at the top. Tap Done once you've gone to the table.",
+      "When a table asks for the bill, its card also says how they'll pay (UPI / QR, card or cash), the total, the split and the tip. Bring the card machine or change if needed.",
       "Plan shows each room drawn from above: every table in its place, coloured by what's happening (Free, Ordered, Eating, Bill asked) with how long it's been open. A table that's calling pulses. Cards shows the tables as a list of cards instead; your choice is kept on this device.",
       "Tap a table to see its orders. Tap Served when the food reaches the table.",
       "Add items opens the POS for that table. Bill & pay goes straight to payment.",

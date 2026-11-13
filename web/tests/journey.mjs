@@ -148,6 +148,8 @@ try {
   if (!upi.startsWith("upi://pay?") || !upi.includes("am=" + Math.ceil((base0 + 50) / 2))) throw new Error("UPI link: " + upi);
   await guest.keyboard.press("Escape");
   ok("guest: the total shows the ₹50 tip before asking; bill asked split 2 ways by UPI, with the pay link and QR for " + Math.ceil((base0 + 50) / 2));
+  await staff.locator("section[aria-label='Calls from tables']").getByText(/Pays by UPI \/ QR · ₹[\d,]+ · 2 ways .* · incl\. tip ₹50/).waitFor({ timeout: 10000 });
+  ok("Floor: the bill call says how the table will pay, the split and the tip");
   await staff.getByRole("button", { name: /^T3/ }).first().click();
   const sheet = staff.getByRole("dialog");
   while (await sheet.getByRole("button", { name: "Served" }).count()) { await sheet.getByRole("button", { name: "Served" }).first().click(); await staff.waitForTimeout(400); }
@@ -155,6 +157,9 @@ try {
   await sheet.getByRole("button", { name: /Bill & pay/ }).click();
   const pay = staff.getByRole("dialog", { name: /Take payment/ });
   await pay.waitFor();
+  await pay.getByText(/The guest chose UPI \/ QR · tip ₹50 · 2 ways on their phone/).waitFor();
+  if (!(await pay.getByLabel("Tip").locator("option").allTextContents()).includes("₹ Amount…")) throw new Error("POS tip has no ₹ Amount");
+  if ((await pay.getByLabel("Tip").locator("option").allTextContents()).includes("15%")) throw new Error("POS tip shows choices the guest doesn't get");
   const kitchenBusy = await pay.getByText(/still with the kitchen/).isVisible();
   if (kitchenBusy) throw new Error("table T3 still has dishes in the kitchen (seeded or bot)");
   await pay.getByRole("button", { name: "Cash" }).click();
