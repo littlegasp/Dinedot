@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Only people at the table can order. A table's first order now waits on Floor (\"T5 wants to order\") until a waiter glances at the table and taps Accept; Deny turns it down. The first phone then shows a 4-digit table code, and friends at the table type it to order from their phones. The code stops working when the bill is paid, so a photo of the QR or a shared link can't be used from home. Switch it off in Settings → Who can order." },
   { date: "13 Nov 2026", text: "Guest bill: the total updates as guests pick a tip or split, before they tap Ask for the bill. Besides the % choices they can type a tip in rupees (₹ Amount). Paying by UPI / QR opens their UPI app with the amount filled in, and shows a QR with the amount for paying from another phone. UPI shows only when your UPI ID is set in Settings." },
   { date: "13 Nov 2026", text: "Kitchen: dishes can be ticked off only once the order is Cooking, so tapping a dish on a New order no longer sends it straight to Ready. Tap Start cooking first." },
   { date: "13 Nov 2026", text: "Print QR codes now prints only the QR cards, 9 to an A4 sheet with a dashed line to cut along. Nothing else on the screen (or added by browser extensions) goes to the printer." },
@@ -77,6 +78,8 @@ export const GUIDE: Record<Route, Section> = {
     title: "Floor", who: "Owner, manager and waiter",
     intro: "Every table at a glance, with calls from guests at the top.",
     steps: [
+      "A new table's first order shows at the very top as \"T5 wants to order\". Glance at the table: if someone is sitting there, tap Accept and the order goes to the kitchen. If nobody is there (someone ordering from a photo of the QR), tap Deny: the order is cancelled.",
+      "Tap a table to see its 4-digit table code. Guests who join later type it on their phone; tell them if they ask. New code makes a fresh one (old phones at the table stay in).",
       "Calls from tables (waiter, water, bill) show at the top. Tap Done once you've gone to the table.",
       "Plan shows each room drawn from above: every table in its place, coloured by what's happening (Free, Ordered, Eating, Bill asked) with how long it's been open. A table that's calling pulses. Cards shows the tables as a list of cards instead; your choice is kept on this device.",
       "Tap a table to see its orders. Tap Served when the food reaches the table.",
@@ -157,6 +160,7 @@ export const GUIDE: Record<Route, Section> = {
       "Bill: GST % and service charge %, the tip choices guests see, and the most a manager can take off a bill as a discount.",
       "Kitchen stations: type your counters separated by commas (for example Tandoor, Curry, Bar). Then pick a station for each section in Menu.",
       "Bills: your legal name, address, GSTIN and FSSAI licence number as they should print, the bill number prefix, and the receipt paper width (80 or 58 mm). Tick GST composition scheme only if you're registered under it: bills then print as a Bill of supply with no GST.",
+      "Who can order: with Waiter approves new tables on, a table's first order waits for a waiter's Accept on Floor, and other phones at the table join with the table code. Turn it off to let guests order straight from the QR.",
       "Payments: your UPI ID (money goes straight to you, no fees), and whether you take UPI / QR, cash and card. Guests only see UPI / QR once the UPI ID is filled in. They pay with the amount already filled in, by their UPI app or by scanning the QR on their bill.",
       "Guest Wi-Fi: shown to guests only while they have an open bill.",
       "Tap Save at the bottom. Changes reach guests' phones within a few seconds.",

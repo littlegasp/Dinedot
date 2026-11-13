@@ -43,12 +43,15 @@ export type LiveVisit = {
   id: string; table_id: string | null; kind: "dine_in" | "takeaway"; token: number | null; status: VisitStatus; opened_at: string; bill_at: string | null;
   guests: number | null; split: number; tip_pct: number; pay_choice: "" | "upi" | "cash" | "card";
   bill: Bill; orders: Order[];
+  /* 0010: false = the first order waits for a waiter's OK; the table's 4-digit code */
+  approved?: boolean; join_code?: string | null;
 };
 export type LiveCall = { id: string; table_id: string; kind: "waiter" | "water" | "bill" | "help"; at: string; seen_at: string | null; seen_by: string | null };
 export type Live = {
   now: string; role: Role; restaurant_id?: string;
   settings: { name: string; currency: string; accepting: boolean; gst_pct: number; service_pct: number; upi_id: string; upi_name: string;
-    stations: string[]; max_discount_pct: number; notice: { text: string; at: string; by: string } | null; day_closed: boolean };
+    stations: string[]; max_discount_pct: number; notice: { text: string; at: string; by: string } | null; day_closed: boolean;
+    approve_tables?: boolean };
   tables: LiveTable[]; areas?: LiveArea[]; visits: LiveVisit[]; calls: LiveCall[];
   today: { sales: number; bills: number; orders: number; guests: number; rating: number | null; flow: Record<string, number> };
 };
@@ -81,11 +84,14 @@ export type GuestMenu = {
 };
 export type GuestState = {
   now: string;
+  /* 0010: open = nobody at the table yet; in = this phone joined; code = needs the table code; locked = too many wrong codes */
+  access?: "open" | "in" | "code" | "locked"; denied?: boolean; tries_left?: number;
   last_paid: { id: string; paid_at: string; total: number; reviewed: boolean; receipt?: import("./receipt").Receipt } | null;
   visit: null | {
     id: string; status: VisitStatus; guests: number | null; split: number; tip_pct: number; pay_choice: string;
     orders: Order[]; calls: { kind: string; at: string; seen: boolean }[]; bill: Bill;
     wifi: { name: string; password: string } | null; upi: { id: string; name: string } | null;
+    waiting?: boolean; join_code?: string | null;
   };
 };
 

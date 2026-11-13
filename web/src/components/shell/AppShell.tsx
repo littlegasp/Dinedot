@@ -108,7 +108,8 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
   const tabs: (typeof nav[number] | "centre")[] = centre ? [...primary.slice(0, 2), "centre", ...primary.slice(2)] : primary;
   const calls = live?.calls ?? [];
   const tableName = (id: string) => live?.tables.find(t => t.id === id)?.code ?? "";
-  const newOrders = live?.visits.flatMap(v => v.orders).filter(o => o.status === "new").length ?? 0;
+  const newOrders = live?.visits.filter(v => v.approved !== false).flatMap(v => v.orders).filter(o => o.status === "new").length ?? 0;
+  const waitingTables = live?.visits.filter(v => v.approved === false).length ?? 0;
 
   React.useEffect(() => {
     const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setCmd(o => !o); } };
@@ -252,7 +253,7 @@ export function AppShell({ route, go, children, title, sub, actions, bleed }: {
               </button>
             );
             const on = route === t.route;
-            const badge = t.route === "kitchen" ? newOrders : t.route === "floor" ? calls.length : 0;
+            const badge = t.route === "kitchen" ? newOrders : t.route === "floor" ? calls.length + waitingTables : 0;
             return (
               <button key={t.route} onClick={() => go(t.route)} aria-current={on ? "page" : undefined} data-tab-on={on ? "1" : undefined}
                 className={cn("relative z-[1] flex h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold text-fg-2 transition-colors", on && "text-coral-strong")}>

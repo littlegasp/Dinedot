@@ -240,7 +240,7 @@ select pg_temp.check(not exists (select 1 from day_closes where restaurant_id = 
 do $$ declare fns text; begin
   select string_agg(p.proname, ',' order by p.proname) into fns from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute');
-  assert fns = 'guest_bill,guest_call,guest_menu,guest_order,guest_review,guest_state', 'anon can run: ' || fns;
+  assert fns = 'guest_bill,guest_call,guest_join,guest_menu,guest_order,guest_review,guest_state', 'anon can run: ' || fns;
   select string_agg(p.proname, ',') into fns from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in ('pay_visit', 'next_token', 'day_closed', 'station_ok', 'insert_order_items', 'visit_label', 'order_open')
      and has_function_privilege('authenticated', p.oid, 'execute');

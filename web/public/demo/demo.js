@@ -61,7 +61,7 @@ const Demo = (() => {
     const areas = [
       { id: "a1", name: "Main", sort: 1, shape: "wide", marks: [{ k: "entrance", x: 440, y: 600 }, { k: "counter", x: 730, y: 590 }, { k: "kitchen", x: 880, y: 90 }, { k: "washroom", x: 90, y: 330 }] },
       { id: "a2", name: "Terrace", sort: 2, shape: "long", marks: [{ k: "window", x: 500, y: 30 }, { k: "stairs", x: 880, y: 220 }] }];
-    const settings = { restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
+    const settings = { approve_tables: true, restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
       accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
       gst_pct: 5, service_pct: 0, tip_options: [0, 5, 10], pay_cash: true, pay_card: true, pay_upi: true,
@@ -132,6 +132,9 @@ const Demo = (() => {
   let db = null;   // created on first use, so a real (Supabase) setup never seeds anything
   function save(){ store.set(KEY, db); }
   function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); }
+    if (db.settings.approve_tables == null) db.settings.approve_tables = true;   // 0010
+    if (!db.devices) db.devices = [];
+    db.visits.forEach(v => { if (!v.join_code && (v.status === "open" || v.status === "bill")) v.join_code = joinCode(); });
     if (!db.areas) {   // demo data from before areas: bring in the tables' areas (as 0008 does)
       db.areas = [];
       db.tables.slice().sort((a, b) => a.sort - b.sort).forEach(t => { if (!db.areas.some(a => a.name.toLowerCase() === t.area.toLowerCase())) db.areas.push({ id: uid(), name: t.area, sort: db.areas.length + 1, shape: "wide", marks: [] }); });
@@ -209,6 +212,7 @@ const Demo = (() => {
     const lines = priceCart(items);
     let v = openVisit(tid);
     if (!v) { v = { id: uid(), table_id: tid, kind: "dine_in", token_no: null, opened_at: now(), status: "open", guests: guests >= 1 ? guests : null, split: 1, tip_pct: 0, pay_choice: "",
+      approved: source !== "guest" || !db.settings.approve_tables, join_code: joinCode(), join_fails: 0,
       bill_at: null, paid_at: null, paid_method: null, paid_by: null, void_reason: "", subtotal: 0, service: 0, gst: 0, tip: 0, total: 0 }; db.visits.push(v); }
     else {
       if (source === "guest" && db.orders.some(o => o.visit_id === v.id && o.source === "guest" && Date.now() - new Date(o.created_at) < 15e3))
@@ -218,7 +222,9 @@ const Demo = (() => {
     const o = { id: uid(), no: ++db.no, visit_id: v.id, table_id: tid, source, created_by: source === "staff" ? me().id : null, status: "new",
       note: String(note || "").slice(0, 300), created_at: now(), started_at: null, ready_at: null, served_at: null, cancel_reason: "", items: lines,
       request_id: request || null };
-    db.orders.push(o); save();
+    db.orders.push(o);
+    if (source !== "guest" && v.approved === false) { v.approved = true; v.approved_by = me().id; }   // staff at the table: accepted
+    save();
     return { order: orderJson(o), visit_id: v.id };
   }
   const me = () => { const u = store.get(WHO); return u ? db.staff.find(s => s.id === u && s.active) : null; };
@@ -231,6 +237,11 @@ const Demo = (() => {
     const a = db.areas.find(x => x.name.toLowerCase() === name.toLowerCase()); if (a) return a.name;
     db.areas.push({ id: uid(), name, shape: "wide", marks: [], sort: Math.max(0, ...db.areas.map(x => x.sort)) + 1 }); return name; }
   const need = ok => { if (!ok) err("You don't have access to this."); };
+  /* 0010: only the people at the table can order */
+  const joinCode = () => String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+  const goodDevice = d => /^[A-Za-z0-9-]{16,64}$/.test(String(d || ""));
+  const devIn = (vid, d) => (db.devices || []).some(x => x.visit_id === vid && x.device === d && x.status === "in");
+  const mayAt = (t, d) => { if (!db.settings.approve_tables) return true; const v = openVisit(t.id); return !v || devIn(v.id, d); };
   const isManager = () => ["owner", "manager"].includes(role());
   const isFloor = () => ["owner", "manager", "cashier", "waiter"].includes(role());
   const log = (action, detail) => { const m = me() || {}; db.activity.unshift({ id: db.activity.length + 1, at: now(), by_id: m.id, by_name: m.name || "", action, detail: detail || "" }); db.activity = db.activity.slice(0, 300); };
@@ -239,6 +250,12 @@ const Demo = (() => {
   /* ---------- pretend kitchen when no staff tab is open ---------- */
   function bot(){
     const hb = +localStorage.getItem(HB) || 0;
+    // pretend waiter: accepts a waiting table after a few seconds when no floor staff are signed in to the demo
+    if (!isFloor() || Date.now() - hb >= 20e3) {
+      let acc = false;
+      db.visits.forEach(v => { if (v.approved === false && (v.status === "open" || v.status === "bill") && Date.now() - new Date(v.waiting_since || v.opened_at) > 5e3) { v.approved = true; v.approved_by = "u-waiter"; acc = true; } });
+      if (acc) save();
+    }
     if (Date.now() - hb < 20e3) return;
     let changed = false; const t = Date.now(), born = db.born || "";
     db.orders.forEach(o => { if (o.created_at < born) return;
@@ -293,23 +310,55 @@ const Demo = (() => {
         items: db.items.filter(i => (db.categories.find(c => c.id === i.category_id) || {}).active).sort((a, b) => a.sort - b.sort)
           .map(i => ({ id: i.id, cat: i.category_id, name: i.name, desc: i.description, price: i.price, diet: i.diet, spice: i.spice, allergens: i.allergens,
             sizes: i.sizes, addons: i.addons, photo: i.photo_url, best: i.bestseller, available: i.available })) }; },
-    guest_state({ p_token }){ bot(); const t = tableBy(p_token), s = db.settings, v = openVisit(t.id);
-      if (!v) { const lp = db.visits.filter(x => x.table_id === t.id && x.status === "paid" && Date.now() - new Date(x.paid_at) < 2 * 3600e3)
+    guest_state({ p_token, p_device }){ bot(); const t = tableBy(p_token), s = db.settings, v = openVisit(t.id), gate = !!s.approve_tables, d = p_device || "";
+      if (!v) { const lp = db.visits.filter(x => x.table_id === t.id && x.status === "paid" && Date.now() - new Date(x.paid_at) < 2 * 3600e3 && (!gate || devIn(x.id, d)))
           .sort((a, b) => a.paid_at < b.paid_at ? 1 : -1)[0];
-        return { visit: null, now: now(), last_paid: lp ? { id: lp.id, paid_at: lp.paid_at, total: lp.total, reviewed: db.reviews.some(r => r.visit_id === lp.id),
+        const denied = gate && db.visits.some(x => x.table_id === t.id && x.status === "void" && Date.now() - new Date(x.opened_at) < 30 * 60e3
+          && db.devices.some(g => g.visit_id === x.id && g.device === d && g.status === "denied"));
+        return { visit: null, now: now(), access: "open", denied, last_paid: lp ? { id: lp.id, paid_at: lp.paid_at, total: lp.total, reviewed: db.reviews.some(r => r.visit_id === lp.id),
           receipt: (({ by, ...r }) => r)(receiptJson(lp.id)) } : null }; }
-      return { now: now(), last_paid: null, visit: { id: v.id, status: v.status, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice,
+      if (gate && !devIn(v.id, d)) { const g = db.devices.find(x => x.visit_id === v.id && x.device === d) || { tries: 0 };
+        return { visit: null, now: now(), last_paid: null, access: g.status === "denied" || g.tries >= 3 || (v.join_fails || 0) >= 10 ? "locked" : "code", tries_left: Math.max(0, 3 - g.tries) }; }
+      return { now: now(), last_paid: null, access: "in", visit: { id: v.id, status: v.status, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice,
+        waiting: v.approved === false, join_code: gate ? v.join_code || null : null,
         orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson),
         calls: db.calls.filter(c => c.visit_id === v.id && !c.done_at).map(c => ({ kind: c.kind, at: c.created_at, seen: !!c.seen_at })),
         bill: bill(v.id), wifi: s.wifi_name ? { name: s.wifi_name, password: s.wifi_password } : null,
         upi: s.pay_upi && s.upi_id ? { id: s.upi_id, name: s.upi_name || s.restaurant_name } : null } }; },
-    guest_order({ p_token, p_items, p_note, p_guests, p_request_id }){ const t = tableBy(p_token); if (!db.settings.accepting_orders) err(db.settings.closed_message);
-      return addOrder(t.id, p_items, p_note, p_guests, "guest", p_request_id); },
-    guest_call({ p_token, p_kind }){ const t = tableBy(p_token); if (!["waiter", "water", "bill", "help"].includes(p_kind)) err("Unknown request.");
+    guest_order({ p_token, p_items, p_note, p_guests, p_request_id, p_device }){ const t = tableBy(p_token); if (!db.settings.accepting_orders) err(db.settings.closed_message);
+      let first = false;
+      if (db.settings.approve_tables && !(p_request_id && db.orders.some(o => o.request_id === p_request_id))) {
+        if (!goodDevice(p_device)) err("Please reload this page, then order again.");
+        const v = openVisit(t.id);
+        if (v) { if (!devIn(v.id, p_device)) err("Enter your table code to order. Ask someone at your table for it."); }
+        else first = true;
+      }
+      const r = addOrder(t.id, p_items, p_note, p_guests, "guest", p_request_id);
+      const v = db.visits.find(x => x.id === r.visit_id);
+      if (first) { v.approved = false; v.waiting_since = now(); db.devices.push({ visit_id: v.id, device: p_device, status: "in", tries: 0 }); save(); }
+      return Object.assign(r, { waiting: v.approved === false }); },
+    guest_join({ p_token, p_device, p_code }){ const t = tableBy(p_token);
+      if (!goodDevice(p_device)) err("Please reload this page and try again.");
+      const v = openVisit(t.id); if (!v) err("Nobody has ordered at this table yet. Order to start the table.");
+      if (devIn(v.id, p_device)) return F.guest_state({ p_token, p_device });
+      let g = db.devices.find(x => x.visit_id === v.id && x.device === p_device);
+      if (g && (g.status === "denied" || g.tries >= 3)) err("Too many wrong codes on this phone. Ask your waiter for help.");
+      if ((v.join_fails || 0) >= 10) err("Too many wrong codes at this table. Ask your waiter for a new code.");
+      if (String(p_code || "") !== v.join_code) {
+        if (!g) { g = { visit_id: v.id, device: p_device, status: "out", tries: 0 }; db.devices.push(g); }
+        g.tries++; v.join_fails = (v.join_fails || 0) + 1; save();
+        return { wrong: true, tries_left: Math.max(0, 3 - g.tries) };
+      }
+      if (g) g.status = "in"; else db.devices.push({ visit_id: v.id, device: p_device, status: "in", tries: 0 });
+      save(); return F.guest_state({ p_token, p_device }); },
+    guest_call({ p_token, p_kind, p_device }){ const t = tableBy(p_token); if (!["waiter", "water", "bill", "help"].includes(p_kind)) err("Unknown request.");
+      if (!mayAt(t, p_device)) err("Enter your table code first. Ask someone at your table for it.");
       if (db.calls.some(c => c.table_id === t.id && c.kind === p_kind && !c.done_at)) return { ok: true, already: true };
       const v = openVisit(t.id); db.calls.push({ id: uid(), table_id: t.id, visit_id: v ? v.id : null, kind: p_kind, created_at: now(), seen_at: null, seen_by: null, done_at: null });
       save(); return { ok: true, already: false }; },
-    guest_bill({ p_token, p_split, p_tip_pct, p_pay, p_tip_amount }){ const t = tableBy(p_token), v = openVisit(t.id);
+    guest_bill({ p_token, p_split, p_tip_pct, p_pay, p_tip_amount, p_device }){ const t = tableBy(p_token), v = openVisit(t.id);
+      if (!mayAt(t, p_device)) err("Enter your table code first. Ask someone at your table for it.");
+      if (v && v.approved === false) err("Your waiter hasn't confirmed your table yet.");
       if (!v) err("There's no open bill for this table.");
       if (!db.orders.some(o => o.visit_id === v.id && o.status !== "cancelled")) err("Nothing has been ordered yet.");
       const amt = Math.round(+p_tip_amount || 0);
@@ -342,13 +391,14 @@ const Demo = (() => {
       return { now: now(), role: role(),
         settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name,
           stations: s.stations || [], max_discount_pct: s.max_discount_pct ?? 20,
-          notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed() },
+          notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed(), approve_tables: !!s.approve_tables },
         areas: db.areas.slice().sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)).map(a => ({ id: a.id, name: a.name, shape: a.shape, marks: a.marks })),
         tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active, x: t.x ?? null, y: t.y ?? null, shape: t.shape || "square" })),
         visits: db.visits.filter(v => v.status === "open" || v.status === "bill" || (v.kind === "takeaway" && v.status === "paid"
             && db.orders.some(o => o.visit_id === v.id && ["new", "cooking", "ready"].includes(o.status))))
           .sort((a, b) => a.opened_at < b.opened_at ? -1 : 1)
           .map(v => ({ id: v.id, table_id: v.table_id, kind: v.kind || "dine_in", token: v.token_no ?? null, status: v.status, opened_at: v.opened_at,
+          approved: v.approved !== false, join_code: v.join_code || null,
           bill_at: v.bill_at, guests: v.guests, split: v.split, tip_pct: v.tip_pct, pay_choice: v.pay_choice, bill: bill(v.id),
           orders: db.orders.filter(o => o.visit_id === v.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1).map(orderJson) })),
         calls: db.calls.filter(c => !c.done_at).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
@@ -362,6 +412,7 @@ const Demo = (() => {
       if (!["new", "cooking", "ready", "served", "cancelled"].includes(p_status)) err("Unknown status.");
       if (!orderOpen(o, p_status === "cancelled")) err("This bill is already closed, so its orders can't change.");
       if (o.status === p_status) return orderJson(o);
+      if (p_status !== "cancelled" && (db.visits.find(v => v.id === o.visit_id) || {}).approved === false) err("This table is waiting for a waiter's OK. Accept it on Floor first.");
       if (!STEPS.includes(o.status + ">" + p_status)) err("This order is " + o.status + " and can't go to " + p_status + " from there. Refresh the screen.");
       if (p_status === "cancelled") need(["owner", "manager"].includes(r) || (["waiter", "cashier"].includes(r) && o.status === "new"));
       const was = o.status; o.status = p_status;
@@ -551,6 +602,25 @@ const Demo = (() => {
       a.marks = marks.map(m => ({ k: m.k, x: Math.round(+m.x), y: Math.round(+m.y) }));
       let n = 0; tabs.forEach(s => { const t = db.tables.find(z => z.id === s.id && z.area === a.name); if (t) { t.x = Math.round(+s.x); t.y = Math.round(+s.y); n++; } });
       log("plan_saved", a.name + ": " + n + " table" + (n === 1 ? "" : "s") + ", " + a.marks.length + " markers"); save(); return n; },
+    staff_accept_table({ p_visit, p_ok }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit);
+      if (!v || !["open", "bill"].includes(v.status)) err("That table has already left.");
+      if (v.approved !== false) return { ok: true, already: true };
+      const code = (db.tables.find(t => t.id === v.table_id) || {}).code;
+      if (p_ok) { v.approved = true; v.approved_by = me().id; log("table_accepted", code); }
+      else {
+        db.orders.forEach(o => { if (o.visit_id === v.id && o.status !== "cancelled") o.status = "cancelled"; });
+        Object.assign(v, { status: "void", void_reason: "Turned down: not at the table" });
+        db.devices.forEach(g => { if (g.visit_id === v.id) g.status = "denied"; });
+        db.calls.forEach(c => { if (c.visit_id === v.id && !c.done_at) c.done_at = now(); });
+        log("table_denied", code);
+      }
+      save(); return { ok: true, already: false }; },
+    staff_new_join_code({ p_visit }){ need(isFloor()); const v = db.visits.find(x => x.id === p_visit && ["open", "bill"].includes(x.status));
+      if (!v) err("That table has already left.");
+      v.join_code = joinCode(); v.join_fails = 0; db.devices = db.devices.filter(g => !(g.visit_id === v.id && g.status === "out"));
+      log("join_code_changed", (db.tables.find(t => t.id === v.table_id) || {}).code); save(); return v.join_code; },
+    owner_set_table_approval({ p_on }){ need(role() === "owner"); db.settings.approve_tables = p_on !== false;
+      log("setting_changed", "Waiter approves new tables: " + (p_on ? "on" : "off")); save(); return null; },
     staff_push_subscribe(){ need(role()); return null; },
     staff_push_unsubscribe(){ need(role()); return null; },
     owner_delete_table({ p_id }){ need(isManager()); if (db.visits.some(v => v.table_id === p_id)) err("This table has bills on record. Switch it off instead.");

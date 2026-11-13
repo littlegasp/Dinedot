@@ -31,8 +31,15 @@ export function GuestScreen() {
   const [busy, setBusy] = React.useState(false);
   const request = React.useRef<string | null>(null);
   const cartKey = token ? `dineos.cart.${token}` : "";
+  // This phone's random id (0010): tells the table's phones apart. Not a name, number or email.
+  const [device, setDevice] = React.useState("");
 
-  React.useEffect(() => { setToken(new URLSearchParams(location.search).get("k")); }, []);
+  React.useEffect(() => {
+    setToken(new URLSearchParams(location.search).get("k"));
+    let d = read<string>("dineos.device", "");
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(d)) { d = "g-" + newRequestId(); write("dineos.device", d); }
+    setDevice(d);
+  }, []);
   React.useEffect(() => {
     if (token === null) return;
     if (!token) { setFatal("This page opens from the QR code on your table."); return; }
@@ -40,12 +47,12 @@ export function GuestScreen() {
       .catch(e => setFatal((e as Error).message));
     setCart(read<CartLine[]>(`dineos.cart.${token}`, []));
   }, [token]);
-  const poll = React.useCallback(() => token ? rpc<GuestState>("guest_state", { p_token: token }).then(setState).catch(() => {}) : Promise.resolve(), [token]);
+  const poll = React.useCallback(() => token && device ? rpc<GuestState>("guest_state", { p_token: token, p_device: device }).then(setState).catch(() => {}) : Promise.resolve(), [token, device]);
   React.useEffect(() => {
-    if (!menu) return;
+    if (!menu || !device) return;
     poll(); const t = setInterval(() => { if (document.visibilityState === "visible") poll(); }, 5000);
     return () => clearInterval(t);
-  }, [menu, poll]);
+  }, [menu, poll, device]);
   React.useEffect(() => { if (cartKey) write(cartKey, cart); request.current = null; }, [cart, cartKey]);
 
   if (fatal) return <Center><UtensilsCrossed className="mx-auto mb-3 size-8 text-fg-2" /><p className="font-display text-lg font-bold text-fg">{fatal}</p></Center>;
@@ -71,14 +78,14 @@ export function GuestScreen() {
   const send = async () => {
     setBusy(true); request.current ??= newRequestId();
     try {
-      await rpc("guest_order", { p_token: token, p_note: note.trim(), p_request_id: request.current,
+      const r = await rpc<{ waiting?: boolean }>("guest_order", { p_token: token, p_note: note.trim(), p_request_id: request.current, p_device: device,
         p_items: cart.map(l => ({ id: l.id, qty: l.qty, size: l.size ?? "", addons: l.addons ?? [] })) });
-      setCart([]); setNote(""); setBasket(false); toast("Order sent to the kitchen"); poll();
-    } catch (e) { toast((e as Error).message, "error"); }   // the same request id is reused if they tap Send again
+      setCart([]); setNote(""); setBasket(false); toast(r.waiting ? "Sent. Your waiter will confirm your table" : "Order sent to the kitchen"); poll();
+    } catch (e) { toast((e as Error).message, "error"); poll(); }   // the same request id is reused if they tap Send again
     finally { setBusy(false); }
   };
   const call = async (kind: "waiter" | "water") => {
-    try { const r = await rpc<{ already: boolean }>("guest_call", { p_token: token, p_kind: kind });
+    try { const r = await rpc<{ already: boolean }>("guest_call", { p_token: token, p_kind: kind, p_device: device });
       toast(r.already ? "Already asked. Someone is on the way." : kind === "water" ? "Water is on its way" : "A waiter is on the way"); poll(); }
     catch (e) { toast((e as Error).message, "error"); }
   };
@@ -103,7 +110,7 @@ export function GuestScreen() {
         <div className="grid grid-cols-3 gap-2 px-4 pt-4">
           <Quick Icon={BellRing} label="Call waiter" onClick={() => call("waiter")} />
           <Quick Icon={Droplets} label="Water" onClick={() => call("water")} />
-          <Quick Icon={Receipt} label="Bill" onClick={() => visit ? setBillOpen(true) : toast("Order something first", "info")} />
+          <Quick Icon={Receipt} label="Bill" onClick={() => visit ? setBillOpen(true) : toast(state?.access === "code" ? "Join the table first: type the table code" : "Order something first", "info")} />
         </div>
         {visit?.wifi && (
           <div className="mx-4 mt-2 flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface px-3 py-2 text-[13px] text-fg">
@@ -113,6 +120,23 @@ export function GuestScreen() {
           </div>
         )}
 
+        {(state?.access === "code" || state?.access === "locked") && <JoinTable token={token!} device={device} table={menu.table.name} locked={state.access === "locked"} triesLeft={state.tries_left ?? 3} onJoined={setState} />}
+        {state?.denied && !visit && (
+          <p role="alert" className="mx-4 mt-4 rounded-[var(--radius)] bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">Your order was turned down. Ordering works only when you&apos;re at the table. If you are, please call a waiter.</p>
+        )}
+        {visit?.waiting && (
+          <div role="status" className="mx-4 mt-4 flex items-start gap-3 rounded-[var(--radius-lg)] border border-warning bg-warning-soft px-4 py-3">
+            <span className="mt-0.5 size-5 shrink-0 animate-spin rounded-full border-2 border-warning-strong border-t-transparent" aria-hidden />
+            <div><p className="font-display text-[15px] font-extrabold text-fg">Waiting for your waiter…</p>
+              <p className="text-[13px] text-fg-2">They&apos;ll check {menu.table.name} and confirm. Your order goes to the kitchen as soon as they do.</p></div>
+          </div>
+        )}
+        {visit?.join_code && (
+          <div className="mx-4 mt-3 flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface px-3 py-2">
+            <div className="min-w-0 flex-1 text-[13px] text-fg-2">Table code. Share it with friends at your table so they can order from their phones.</div>
+            <span className="num font-display text-2xl font-extrabold tracking-[.25em] text-fg" aria-label={`Table code ${visit.join_code.split("").join(" ")}`}>{visit.join_code}</span>
+          </div>
+        )}
         {visit && visit.orders.length > 0 && <Tracker visit={visit} />}
         {!visit && state?.last_paid && <Review token={token!} paid={state.last_paid} reviewUrl={p.review_url} onDone={poll} />}
 
@@ -196,7 +220,7 @@ export function GuestScreen() {
           {pick && <Picker i={pick} onAdd={(s, a) => { add(pick, s, a); setPick(null); }} />}
         </Dialog>
 
-        {visit && <BillSheet open={billOpen} onOpenChange={setBillOpen} token={token!} menu={menu} visit={visit} onDone={poll} />}
+        {visit && <BillSheet open={billOpen} onOpenChange={setBillOpen} token={token!} device={device} menu={menu} visit={visit} onDone={poll} />}
       </div>
       <Toaster />
     </div>
@@ -259,7 +283,7 @@ function Picker({ i, onAdd }: { i: Item; onAdd: (s?: { name: string; price: numb
   );
 }
 
-function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; token: string; menu: GuestMenu; visit: NonNullable<GuestState["visit"]>; onDone: () => void }) {
+function BillSheet({ open, onOpenChange, token, device, menu, visit, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; token: string; device: string; menu: GuestMenu; visit: NonNullable<GuestState["visit"]>; onDone: () => void }) {
   const p = menu.place;
   const b = visit.bill;
   const asked = visit.status === "bill";
@@ -314,7 +338,7 @@ function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: b
           <Button size="xl" variant="primary" disabled={busy || tooBig} onClick={async () => {
             setBusy(true);
             try {
-              await rpc("guest_bill", { p_token: token, p_split: split, p_tip_pct: tip === "amount" ? 0 : tip, p_pay: pay, p_tip_amount: tip === "amount" ? tipNow : 0 });
+              await rpc("guest_bill", { p_token: token, p_split: split, p_tip_pct: tip === "amount" ? 0 : tip, p_pay: pay, p_tip_amount: tip === "amount" ? tipNow : 0, p_device: device });
               toast("Your bill is on its way"); onDone();
             } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); } }}>Ask for the bill · {inr(payNow)}{splitNow > 1 ? " each" : ""}</Button>
         </div>
@@ -341,6 +365,38 @@ function BillSheet({ open, onOpenChange, token, menu, visit, onDone }: { open: b
 function UpiQr({ text }: { text: string }) {
   const svg = React.useMemo(() => { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }, [text]);
   return <div role="img" aria-label="UPI QR code with the amount" className="size-48 rounded-[var(--radius)] bg-white [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+/** Someone at this table already ordered: type the table's 4-digit code from their phone to join (0010). */
+function JoinTable({ token, device, table, locked, triesLeft, onJoined }: { token: string; device: string; table: string; locked: boolean; triesLeft: number; onJoined: (s: GuestState) => void }) {
+  const [code, setCode] = React.useState("");
+  const [left, setLeft] = React.useState(triesLeft);
+  const [busy, setBusy] = React.useState(false);
+  const [wrong, setWrong] = React.useState(false);
+  const join = async (c: string) => {
+    setBusy(true); setWrong(false);
+    try {
+      const r = await rpc<GuestState & { wrong?: boolean; tries_left?: number }>("guest_join", { p_token: token, p_device: device, p_code: c });
+      if (r.wrong) { setWrong(true); setLeft(r.tries_left ?? 0); setCode(""); }
+      else { toast("You're in. Order away!"); onJoined(r); }
+    } catch (e) { toast((e as Error).message, "error"); setCode(""); setLeft(0); }
+    finally { setBusy(false); }
+  };
+  if (locked || left <= 0) return (
+    <p role="alert" className="mx-4 mt-4 rounded-[var(--radius)] bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">Too many wrong codes on this phone. Please call a waiter: they can give you the table code.</p>
+  );
+  return (
+    <section aria-label={`Join ${table}`} className="mx-4 mt-4 grid gap-3 rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]">
+      <div><h2 className="font-display text-lg font-extrabold text-fg">Join {table}</h2>
+        <p className="text-[13px] text-fg-2">Someone at your table has already ordered. Type the 4-digit table code from their phone, or ask your waiter.</p></div>
+      <input aria-label="Table code" inputMode="numeric" autoComplete="one-time-code" maxLength={4} value={code} disabled={busy}
+        onChange={e => { const c = e.target.value.replace(/\D/g, "").slice(0, 4); setCode(c); if (c.length === 4) join(c); }}
+        className={cn("num h-14 rounded-[var(--radius)] border bg-background text-center font-display text-3xl font-extrabold tracking-[.6em] text-fg outline-none focus:ring-2 focus:ring-[var(--focus)]",
+          wrong ? "border-danger" : "border-border")} placeholder="····" />
+      {wrong && <p className="text-[13px] font-semibold text-danger">That code isn&apos;t right. {left} {left === 1 ? "try" : "tries"} left.</p>}
+      <p className="text-[12px] text-fg-2">You can look at the menu meanwhile.</p>
+    </section>
+  );
 }
 
 function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {

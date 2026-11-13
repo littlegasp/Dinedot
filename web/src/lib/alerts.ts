@@ -40,7 +40,12 @@ function eventsFor(live: Live, role: Role, kitchenScreen: boolean): Event[] {
   const name = (tableId: string | null, token: number | null) => tableId ? (live.tables.find(t => t.id === tableId)?.code ?? "") : `Token ${token}`;
   const out: Event[] = [];
   const kitchen = role === "kitchen" || kitchenScreen;
+  for (const v of live.visits) {
+    // 0010: a new table waiting for a waiter's OK rings like a call
+    if (!kitchen && v.approved === false) out.push({ key: `w:${v.id}`, kind: "call", title: `${name(v.table_id, v.token)} wants to order`, body: "Check the table, then Accept or Deny on Floor" });
+  }
   for (const v of live.visits) for (const o of v.orders) {
+    if (v.approved === false) continue;
     if (kitchen && o.status === "new") out.push({ key: `o:${o.id}`, kind: "order", title: `New order · ${name(v.table_id, v.token)}`, body: o.items.map(i => `${i.qty}× ${i.name}`).join(", ") });
     if (!kitchen && o.status === "ready") out.push({ key: `r:${o.id}`, kind: "ready", title: `Ready to serve · ${name(v.table_id, v.token)}`, body: `Order #${o.no}` });
   }

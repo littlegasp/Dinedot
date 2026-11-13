@@ -9,7 +9,8 @@ import { useStaff } from "@/lib/staff";
 import type { Settings } from "@/lib/types";
 
 export function SettingsScreen() {
-  const { me, reload } = useStaff();
+  const { me, reload, live } = useStaff();
+  const [gateBusy, setGateBusy] = React.useState(false);
   const [s, setS] = React.useState<Settings | null>(null);
   const [saved, setSaved] = React.useState<Settings | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -115,6 +116,19 @@ export function SettingsScreen() {
           <Field label="Stations" hint="Comma separated, up to 8, e.g. Tandoor, Curry, Bar. Then pick a station for each section in Menu.">
             <Input value={stations} onChange={e => setStations(e.target.value)} placeholder="Leave empty for one kitchen screen" /></Field>
           {stationList.length > 0 && <p className="text-[12px] text-fg-2">On each kitchen screen, pick its station at the top. A removed station is taken off its sections and dishes.</p>}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Who can order" sub="Stops orders from a photo of the QR or a shared link." />
+        <div className="grid gap-3 px-5 pb-5">
+          <label className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3">
+            <span><span className="block text-sm font-semibold text-fg">Waiter approves new tables</span>
+              <span className="text-[12px] text-fg-2">A table&apos;s first order waits on Floor until a waiter taps Accept. Then the table gets a 4-digit code: friends at the table type it to order from their phones. The code stops working when the bill is paid.</span></span>
+            <Switch checked={live?.settings.approve_tables ?? true} disabled={gateBusy}
+              onChange={async v => { setGateBusy(true); try { await rpc("owner_set_table_approval", { p_on: v }); toast(v ? "New tables need a waiter's OK" : "Guests order straight from the QR"); reload(); } catch (e) { toast((e as Error).message, "error"); } finally { setGateBusy(false); } }}
+              label="Waiter approves new tables" />
+          </label>
         </div>
       </Card>
 

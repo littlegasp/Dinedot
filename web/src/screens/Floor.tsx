@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Check, Plus, Receipt, Users, X } from "lucide-react";
+import { Check, KeyRound, Plus, Receipt, RefreshCw, ShieldQuestion, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState, Input, Segmented, Skeleton } from "@/components/ui/primitives";
 import { Dialog, Sheet } from "@/components/ui/overlay";
@@ -36,8 +36,33 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
   const open = openId ? tables.find(t => t.id === openId) : undefined;
   const ov = open ? visitOf(open, live.visits) : undefined;
 
+  const waiting = live.visits.filter(v => v.approved === false && v.table_id);
+  const decide = (v: (typeof waiting)[number], ok: boolean) =>
+    run(() => rpc("staff_accept_table", { p_visit: v.id, p_ok: ok }), ok ? `${code(v.table_id!)} accepted: sent to the kitchen` : `${code(v.table_id!)} turned down`);
+
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+      {waiting.length > 0 && (
+        <section aria-label="Tables waiting for your OK" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {waiting.map(v => (
+            <div key={v.id} className="grid gap-3 rounded-[var(--radius-lg)] border border-warning bg-warning-soft p-3">
+              <div className="flex items-start gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-warning text-[#171b24]"><ShieldQuestion className="size-5" aria-hidden /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-base font-extrabold text-fg">{code(v.table_id!)} wants to order</p>
+                  <p className="text-[12px] text-fg-2">{minsAgo(minutesSince(v.opened_at))} · {v.orders.flatMap(o => o.items).map(i => `${i.qty}× ${i.name}`).join(", ")}</p>
+                  <p className="mt-1 text-[12px] font-semibold text-warning-strong">Glance at the table: is someone sitting there?</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="danger" disabled={pending} onClick={() => decide(v, false)}><X />Deny</Button>
+                <Button variant="success" disabled={pending} onClick={() => decide(v, true)}><Check />Accept</Button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
       {live.calls.length > 0 && (
         <section aria-label="Calls from tables" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {live.calls.map(c => { const I = CALL_ICON[c.kind]; return (
@@ -65,6 +90,7 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
           {view === "plan" ? (
             <FloorPlan area={a} room={areaList.find(x => x.name === a)?.shape} marks={areaList.find(x => x.name === a)?.marks} tables={tables.filter(t => t.area === a)} onOpen={t => setOpenId(t.id)} info={t => {
               const v = visitOf(t, live.visits), st = tableState(v), call = live.calls.find(c => c.table_id === t.id);
+              if (v?.approved === false) return { state: "ordered", word: "Needs OK", ping: true, sub: minsAgo(minutesSince(v.opened_at)) };
               return { state: st, word: call ? CALL_SHORT[call.kind] : TABLE_STATE[st].label, ping: !!call,
                 sub: v ? minsAgo(minutesSince(v.opened_at)) : undefined };
             }} />
@@ -87,6 +113,24 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
         ) : (
           <div className="grid gap-4">
             <div className="flex items-center gap-2"><TableStatus state={tableState(ov)} /><span className="text-[13px] text-fg-2">open {minsAgo(minutesSince(ov.opened_at))}</span></div>
+            {ov.approved === false && (
+              <div className="grid gap-2 rounded-[var(--radius)] bg-warning-soft p-3">
+                <p className="text-sm font-semibold text-warning-strong">This table&apos;s first order is waiting for your OK. Accept it if someone is sitting here.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="danger" disabled={pending} onClick={() => decide(ov, false)}><X />Deny</Button>
+                  <Button variant="success" disabled={pending} onClick={() => decide(ov, true)}><Check />Accept</Button>
+                </div>
+              </div>
+            )}
+            {live.settings.approve_tables && ov.join_code && (
+              <div className="flex items-center gap-3 rounded-[var(--radius)] border border-border px-3 py-2">
+                <KeyRound className="size-4 shrink-0 text-fg-2" aria-hidden />
+                <span className="text-[13px] text-fg-2">Table code</span>
+                <span className="num font-display text-xl font-extrabold tracking-[.2em] text-fg" aria-label={`Table code ${ov.join_code.split("").join(" ")}`}>{ov.join_code}</span>
+                <Button size="sm" variant="ghost" className="ml-auto" disabled={pending}
+                  onClick={() => run(() => rpc("staff_new_join_code", { p_visit: ov.id }), "New table code made")}><RefreshCw />New code</Button>
+              </div>
+            )}
             <Card className="divide-y divide-border">
               {ov.orders.map(o => (
                 <div key={o.id} className="px-4 py-3">

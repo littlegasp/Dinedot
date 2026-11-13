@@ -184,6 +184,6 @@ select (select count(*) from orders where restaurant_id = :'r1') = :before1 as k
 do $$ declare fns text; begin
   select string_agg(p.proname, ',' order by p.proname) into fns from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute');
-  assert fns = 'guest_bill,guest_call,guest_menu,guest_order,guest_review,guest_state', 'anon can run: ' || fns;
+  assert fns = 'guest_bill,guest_call,guest_join,guest_menu,guest_order,guest_review,guest_state', 'anon can run: ' || fns;
 end $$;
 \echo 0004 TESTS PASSED

@@ -32,7 +32,8 @@ export function KitchenScreen() {
   const here = station && stations.includes(station) ? station : "";
   const pickStation = (s: string) => { setStation(s); try { localStorage.setItem(STATION_KEY, s); } catch { /* private window */ } };
 
-  const tickets = (live?.visits ?? []).flatMap(v => v.orders.filter(o => o.status in NEXT)
+  // a table still waiting for a waiter's OK (0010) doesn't reach the kitchen yet
+  const tickets = (live?.visits ?? []).filter(v => v.approved !== false).flatMap(v => v.orders.filter(o => o.status in NEXT)
       .map(o => ({ o, table: visitLabel(v, live!.tables), takeaway: v.kind === "takeaway", paid: v.status === "paid",
                    mine: here ? o.items.filter(i => i.station === here) : o.items })))
     .filter(t => t.mine.length > 0)
