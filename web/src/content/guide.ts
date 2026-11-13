@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 export type Section = { title: string; who: string; intro: string; steps: string[]; tips?: string[] };
 
 export const WHATS_NEW: { date: string; text: string }[] = [
+  { date: "13 Nov 2026", text: "Areas: Tables & QR → Areas lists the parts of your restaurant (Main, Rooftop, AC Hall…). Add, rename and reorder them, and pick each room's shape (Wide, Square or Long). When you add a table you pick its area from a list, so \"terrace\" and \"Terrace\" can't become two rooms. In Arrange tables you can also place the entrance, counter, kitchen, washroom, windows, stairs and pillars." },
   { date: "13 Nov 2026", text: "Floor plan: Tables & QR and Floor now show each room drawn from above, with every table in its place and its chairs. On Floor each table shows its colour and word (Free, Ordered, Eating, Bill asked) and a table that's calling pulses. Managers place tables with Arrange tables. Plan / Cards switches back to the old view." },
   { date: "13 Nov 2026", text: `Use ${BRAND.name} like a phone app: install it from More → Install app (Android) or Share → Add to Home Screen (iPhone). It opens full screen with its own icon.` },
   { date: "13 Nov 2026", text: "Phone alerts: turn them on from the bell and your phone buzzes even when the app is closed. The kitchen gets new orders; waiters and cashiers get calls from tables and food that's ready." },
@@ -118,9 +119,12 @@ export const GUIDE: Record<Route, Section> = {
     title: "Tables & QR", who: "Owner and manager",
     intro: "Your tables and the QR code stuck on each one.",
     steps: [
-      "Tap Add table, give it a number (T1, P2…), the area, seats and shape (Square, Round or Long).",
+      "Tap Areas to set up the parts of your restaurant (Main, Rooftop, AC Hall, Family room…). Type a name under New area and tap Add area. The arrows change their order on every screen; Room sets each room's shape (Wide, Square or Long).",
+      "To rename an area, change its name in Areas and tap Rename: its tables move with it. An area can be deleted only when it has no tables.",
+      "Tap Add table, give it a number (T1, P2…), seats, shape (Square, Round or Long) and pick its area. For an area that isn't in the list yet, pick + New area… and type its name.",
       "Plan shows each area as a room with your tables in it. Tap a table to change it or print its QR code. Cards shows the QR cards instead.",
-      "To match the plan to your restaurant, tap Arrange tables, drag each table to where it stands, then tap Save layout. Cancel leaves the plan as it was. Each area (Main, Terrace…) is arranged on its own.",
+      "To match the plan to your restaurant, tap Arrange tables, drag each table to where it stands, then tap Save layout. Cancel leaves the plan as it was. Each area is arranged on its own.",
+      "While arranging, use + Add to the room… to place the Entrance, Counter, Kitchen, Washroom, Window, Stairs or a Pillar, and drag it into place. Tap one and Remove to take it away. Staff see them on Floor too.",
       "Moving a table to another area puts it at a starting spot there; arrange it again.",
       "Print QR codes prints one card per table. Stick each card on its table.",
       "If a QR card is lost or copied, open the table and tap Replace QR. The old code stops working at once; print the new one.",

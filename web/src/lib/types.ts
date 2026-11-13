@@ -33,6 +33,10 @@ export type Order = {
 
 export type TableShape = "square" | "round" | "long";
 export type LiveTable = { id: string; code: string; name: string; area: string; seats: number; active: boolean; x?: number | null; y?: number | null; shape?: TableShape };
+export type RoomShape = "wide" | "square" | "long";
+export type MarkKind = "entrance" | "counter" | "kitchen" | "washroom" | "window" | "stairs" | "pillar";
+export type Mark = { k: MarkKind; x: number; y: number };
+export type LiveArea = { id: string; name: string; shape: RoomShape; marks: Mark[] };
 export type LiveVisit = {
   id: string; table_id: string | null; kind: "dine_in" | "takeaway"; token: number | null; status: VisitStatus; opened_at: string; bill_at: string | null;
   guests: number | null; split: number; tip_pct: number; pay_choice: "" | "upi" | "cash" | "card";
@@ -43,7 +47,7 @@ export type Live = {
   now: string; role: Role; restaurant_id?: string;
   settings: { name: string; currency: string; accepting: boolean; gst_pct: number; service_pct: number; upi_id: string; upi_name: string;
     stations: string[]; max_discount_pct: number; notice: { text: string; at: string; by: string } | null; day_closed: boolean };
-  tables: LiveTable[]; visits: LiveVisit[]; calls: LiveCall[];
+  tables: LiveTable[]; areas?: LiveArea[]; visits: LiveVisit[]; calls: LiveCall[];
   today: { sales: number; bills: number; orders: number; guests: number; rating: number | null; flow: Record<string, number> };
 };
 

@@ -7,7 +7,7 @@ import { Dialog, Sheet } from "@/components/ui/overlay";
 import { TABLE_STATE, TableStatus, tableState, visitOf } from "@/components/ui/status";
 import { CALL_ICON, CALL_LABEL } from "@/components/shell/AppShell";
 import { FloorPlan } from "@/components/FloorPlan";
-import { usePlanView, VIEW_OPTIONS } from "@/screens/Tables";
+import { areasOf, usePlanView, VIEW_OPTIONS } from "@/screens/Tables";
 import { rpc } from "@/lib/api";
 import { minutesSince, useAction, useStaff } from "@/lib/staff";
 import type { LiveTable, OrderStatus } from "@/lib/types";
@@ -30,7 +30,8 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
   const tables = live.tables.filter(t => t.active);
   if (!tables.length) return <Card><EmptyState icon={<Users />} title="No tables yet" body="Add tables and print their QR codes from Tables & QR." /></Card>;
 
-  const areas = [...new Set(tables.map(t => t.area))];
+  const areaList = areasOf(live.areas, tables).filter(a => tables.some(t => t.area === a.name));   // rooms with tables
+  const areas = areaList.map(a => a.name);
   const code = (id: string) => live.tables.find(t => t.id === id)?.code ?? "";
   const open = openId ? tables.find(t => t.id === openId) : undefined;
   const ov = open ? visitOf(open, live.visits) : undefined;
@@ -62,7 +63,7 @@ export function FloorScreen({ openPos }: { openPos: (tableId: string, pay?: bool
         <section key={a} aria-label={a} className="min-w-0">
           {areas.length > 1 && view === "cards" && <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-fg-2">{a}</h2>}
           {view === "plan" ? (
-            <FloorPlan area={a} tables={tables.filter(t => t.area === a)} onOpen={t => setOpenId(t.id)} info={t => {
+            <FloorPlan area={a} room={areaList.find(x => x.name === a)?.shape} marks={areaList.find(x => x.name === a)?.marks} tables={tables.filter(t => t.area === a)} onOpen={t => setOpenId(t.id)} info={t => {
               const v = visitOf(t, live.visits), st = tableState(v), call = live.calls.find(c => c.table_id === t.id);
               return { state: st, word: call ? CALL_SHORT[call.kind] : TABLE_STATE[st].label, ping: !!call,
                 sub: v ? minsAgo(minutesSince(v.opened_at)) : undefined };

@@ -211,10 +211,24 @@ try {
   ok("guest menu shows the new dish as sold out");
 
   await nav("tables");
+  await staff.getByRole("button", { name: "Areas" }).click();
+  const ar = staff.getByRole("dialog");
+  await ar.getByLabel("New area").fill("garden ");
+  await ar.getByRole("button", { name: "Add area" }).click();
+  await staff.getByText("Area added").waitFor();
+  await ar.getByRole("group", { name: "Room shape of garden" }).getByRole("radio", { name: "Square" }).click();
+  await staff.getByText("Room shape saved").waitFor();
+  await ar.getByLabel("Name of garden").fill("Garden");
+  await ar.getByRole("button", { name: "Rename" }).click();
+  await staff.getByText("Area renamed").waitFor();
+  await ar.getByRole("button", { name: "Delete Main" }).isDisabled() || (() => { throw new Error("Main has tables but could be deleted"); })();
+  await staff.keyboard.press("Escape");
+  await ar.waitFor({ state: "detached" });
+  ok("tables: area added, room shape set, renamed; an area with tables can't be deleted");
   await staff.getByRole("button", { name: "Add table" }).click();
   const tb = staff.getByRole("dialog");
   await tb.getByLabel("Table number").fill("Z9");
-  await tb.getByLabel("Area").fill("Garden");
+  await tb.getByLabel("Area").selectOption("Garden");
   await tb.getByRole("button", { name: "Save table" }).click();
   await staff.getByText("Table saved").waitFor();
   await staff.getByRole("button", { name: /^Z9/ }).first().click();
@@ -233,10 +247,14 @@ try {
   await staff.getByRole("button", { name: "Arrange tables" }).click();
   await staff.getByRole("button", { name: /^Z9, 4 seats/ }).focus();
   await staff.keyboard.press("Shift+ArrowRight");
+  await staff.getByLabel("Add to the room").selectOption("entrance");
+  await staff.getByRole("button", { name: /^Entrance marker/ }).focus();
+  await staff.keyboard.press("ArrowDown");
   await staff.getByRole("button", { name: "Save layout" }).click();
   await staff.getByText("Layout saved").waitFor();
   await staff.getByRole("button", { name: "Arrange tables" }).waitFor();
-  ok("tables: floor plan, a table moved with the keyboard and the layout saved");
+  await staff.getByRole("group", { name: "Garden floor plan" }).locator("text", { hasText: "Entrance" }).waitFor();
+  ok("tables: floor plan, a table and the entrance placed with the keyboard, layout saved");
 
   await nav("settings");
   await staff.getByLabel("Tagline").fill("Tested tagline");

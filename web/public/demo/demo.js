@@ -56,8 +56,11 @@ const Demo = (() => {
     ["Chicken Biryani", "Jeera Rice"].forEach(n => { items.find(x => x.name === n).station = "Curry"; });
     const tables = ["T1","T2","T3","T4","T5","T6","T7","T8"].map((c, i) => ({ id: "t" + (i + 1), code: c, name: "", area: i < 6 ? "Main" : "Terrace",
       seats: [4, 4, 2, 6, 4, 4, 2, 8][i], sort: i + 1, active: true, token: "demo-" + c,
-      x: [170, 400, 630, 270, 560, 820, 230, 590][i], y: [180, 180, 170, 450, 440, 420, 220, 360][i],
+      x: [170, 400, 630, 270, 560, 820, 230, 590][i], y: [180, 180, 170, 450, 440, 420, 200, 270][i],
       shape: ["square", "square", "round", "long", "round", "square", "round", "long"][i] }));
+    const areas = [
+      { id: "a1", name: "Main", sort: 1, shape: "wide", marks: [{ k: "entrance", x: 440, y: 600 }, { k: "counter", x: 730, y: 590 }, { k: "kitchen", x: 880, y: 90 }, { k: "washroom", x: 90, y: 330 }] },
+      { id: "a2", name: "Terrace", sort: 2, shape: "long", marks: [{ k: "window", x: 500, y: 30 }, { k: "stairs", x: 880, y: 220 }] }];
     const settings = { restaurant_name: "The Copper Pot", tagline: "North Indian kitchen & grill", currency: "₹", accent: "#F5A524",
       accepting_orders: true, closed_message: "The kitchen is closed right now. Please ask a waiter.",
       wifi_name: "CopperPot-Guest", wifi_password: "welcome123", upi_id: "yourrestaurant@upi", upi_name: "The Copper Pot",
@@ -67,7 +70,7 @@ const Demo = (() => {
       legal_name: "Copper Pot Foods LLP", bill_address: "Shop 4, Saki Vihar Road, Andheri East, Mumbai 400072", gstin: "27ABCDE1234F1Z5",
       fssai: "11521998000123", sac: "996331", gst_composition: false, invoice_prefix: "CP", bill_footer: "Thank you! Please visit again.", receipt_width: 80,
       updated_at: now() };
-    const db = { settings, categories: cats, items, tables, visits: [], orders: [], calls: [], reviews: [], activity: [], payments: [], closes: [], no: 100, oi: 0, token: 0, token_day: "",
+    const db = { settings, categories: cats, items, tables, areas, visits: [], orders: [], calls: [], reviews: [], activity: [], payments: [], closes: [], no: 100, oi: 0, token: 0, token_day: "",
       staff: TEAM.map(t => Object.assign({ phone: "", active: true, created_at: ago(86400 * 60) }, t)) };
 
     // 21 days of history for the dashboard
@@ -128,7 +131,12 @@ const Demo = (() => {
   /* ---------- storage ---------- */
   let db = null;   // created on first use, so a real (Supabase) setup never seeds anything
   function save(){ store.set(KEY, db); }
-  function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); } }
+  function load(){ const x = store.get(KEY); if (x && x.settings) db = x; else if (!db) { db = seed(); save(); }
+    if (!db.areas) {   // demo data from before areas: bring in the tables' areas (as 0008 does)
+      db.areas = [];
+      db.tables.slice().sort((a, b) => a.sort - b.sort).forEach(t => { if (!db.areas.some(a => a.name.toLowerCase() === t.area.toLowerCase())) db.areas.push({ id: uid(), name: t.area, sort: db.areas.length + 1, shape: "wide", marks: [] }); });
+      db.tables.forEach(t => { t.area = db.areas.find(a => a.name.toLowerCase() === t.area.toLowerCase()).name; });
+    } }
 
   /* ---------- helpers (mirror the SQL) ---------- */
   /* Financial year code (2627 = Apr 2026–Mar 2027) and the next invoice number, same as 0006 */
@@ -215,6 +223,13 @@ const Demo = (() => {
   }
   const me = () => { const u = store.get(WHO); return u ? db.staff.find(s => s.id === u && s.active) : null; };
   const role = () => (me() || {}).role;
+  const ROOMS = { wide: [1000, 640], square: [640, 640], long: [1000, 400] };
+  const MARK_KINDS = ["entrance", "counter", "kitchen", "washroom", "window", "stairs", "pillar"];
+  const tidy = v => String(v || "").trim().replace(/\s+/g, " ");
+  /** A table's area: the existing one whatever the capitals ("terrace " → "Terrace"), or a new area (as 0008's trigger). */
+  function areaFor(v){ const name = tidy(v) || "Main"; if (name.length > 30) err("Keep the area name to 30 letters.");
+    const a = db.areas.find(x => x.name.toLowerCase() === name.toLowerCase()); if (a) return a.name;
+    db.areas.push({ id: uid(), name, shape: "wide", marks: [], sort: Math.max(0, ...db.areas.map(x => x.sort)) + 1 }); return name; }
   const need = ok => { if (!ok) err("You don't have access to this."); };
   const isManager = () => ["owner", "manager"].includes(role());
   const isFloor = () => ["owner", "manager", "cashier", "waiter"].includes(role());
@@ -325,6 +340,7 @@ const Demo = (() => {
         settings: { name: s.restaurant_name, currency: s.currency, accepting: s.accepting_orders, gst_pct: s.gst_pct, service_pct: s.service_pct, upi_id: s.upi_id, upi_name: s.upi_name,
           stations: s.stations || [], max_discount_pct: s.max_discount_pct ?? 20,
           notice: s.team_notice ? { text: s.team_notice, at: s.team_notice_at, by: s.team_notice_by } : null, day_closed: dayClosed() },
+        areas: db.areas.slice().sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)).map(a => ({ id: a.id, name: a.name, shape: a.shape, marks: a.marks })),
         tables: db.tables.slice().sort((a, b) => a.sort - b.sort).map(t => ({ id: t.id, code: t.code, name: t.name, area: t.area, seats: t.seats, active: t.active, x: t.x ?? null, y: t.y ?? null, shape: t.shape || "square" })),
         visits: db.visits.filter(v => v.status === "open" || v.status === "bill" || (v.kind === "takeaway" && v.status === "paid"
             && db.orders.some(o => o.visit_id === v.id && ["new", "cooking", "ready"].includes(o.status))))
@@ -491,8 +507,8 @@ const Demo = (() => {
       let t = p.id && db.tables.find(x => x.id === p.id);
       const shape = p.shape == null || p.shape === "" ? (t && t.shape) || "square" : p.shape;
       if (!["square", "round", "long"].includes(shape)) err("Pick square, round or long.");
-      const row = { code, name: p.name || "", area: String(p.area || "").trim() || "Main", seats: +p.seats || 4, active: p.active !== false, shape };
-      if (t && t.area !== row.area) { t.x = null; t.y = null; }   // a new room: it gets a starting spot there
+      const row = { code, name: p.name || "", area: areaFor(p.area), seats: +p.seats || 4, active: p.active !== false, shape };
+      if (t && t.area.toLowerCase() !== row.area.toLowerCase()) { t.x = null; t.y = null; }   // a new room: it gets a starting spot there
       if (t) Object.assign(t, row, p.sort != null ? { sort: +p.sort } : {});
       else { t = Object.assign({ id: uid(), token: "demo-" + code + "-" + Math.random().toString(36).slice(2, 6), sort: Math.max(0, ...db.tables.map(x => x.sort)) + 1 }, row); db.tables.push(t); }
       save(); return t.id; },
@@ -501,6 +517,33 @@ const Demo = (() => {
         if (!(x >= 0 && x <= 1000 && y >= 0 && y <= 640)) err("A table is outside the plan.");
         const t = db.tables.find(z => z.id === s.id); if (t) { t.x = x; t.y = y; n++; } });
       log("plan_saved", n + " tables"); save(); return n; },
+    owner_save_area({ p }){ need(isManager()); const name = tidy(p.name);
+      if (!name) err("Give the area a name."); if (name.length > 30) err("Keep the area name to 30 letters.");
+      if (db.areas.some(a => a.name.toLowerCase() === name.toLowerCase() && a.id !== p.id)) err("There's already an area called " + name + ".");
+      if (!p.id) { const shape = p.shape || "wide"; if (!ROOMS[shape]) err("Pick wide, square or long.");
+        const a = { id: uid(), name, shape, marks: [], sort: Math.max(0, ...db.areas.map(x => x.sort)) + 1 }; db.areas.push(a); log("area_added", name); save(); return a.id; }
+      const a = db.areas.find(x => x.id === p.id); if (!a) err("That area is gone.");
+      const shape = p.shape || a.shape; if (!ROOMS[shape]) err("Pick wide, square or long.");
+      if (shape !== a.shape) { const [w, h] = ROOMS[shape];
+        a.marks = a.marks.map(m => ({ ...m, x: Math.min(m.x, w - 30), y: Math.min(m.y, h - 30) }));
+        db.tables.filter(t => t.area === a.name && t.x != null).forEach(t => { t.x = Math.min(t.x, w - 50); t.y = Math.min(t.y, h - 50); }); }
+      if (name !== a.name) { db.tables.filter(t => t.area === a.name).forEach(t => { t.area = name; }); log("area_renamed", a.name + " → " + name); }
+      a.name = name; a.shape = shape; save(); return a.id; },
+    owner_delete_area({ p_id }){ need(isManager()); const a = db.areas.find(x => x.id === p_id); if (!a) return null;
+      const n = db.tables.filter(t => t.area === a.name).length;
+      if (n) err("Move its " + n + " table" + (n === 1 ? "" : "s") + " to another area first.");
+      db.areas = db.areas.filter(x => x.id !== p_id); log("area_deleted", a.name); save(); return null; },
+    owner_sort_areas({ p_ids }){ need(isManager()); (p_ids || []).forEach((id, i) => { const a = db.areas.find(x => x.id === id); if (a) a.sort = i + 1; }); save(); return null; },
+    owner_save_room({ p }){ need(isManager()); const a = db.areas.find(x => x.id === p.area_id); if (!a) err("That area is gone.");
+      const [w, h] = ROOMS[a.shape], tabs = p.tables || [], marks = p.marks || [];
+      if (!Array.isArray(tabs) || tabs.length > 300) err("Check the plan.");
+      if (!Array.isArray(marks) || marks.length > 40) err("Too many markers in one area.");
+      if (tabs.some(s => !(+s.x >= 0 && +s.x <= w && +s.y >= 0 && +s.y <= h))) err("A table is outside the room.");
+      if (marks.some(m => !MARK_KINDS.includes(m.k))) err("That marker isn't one we know.");
+      if (marks.some(m => !(+m.x >= 0 && +m.x <= w && +m.y >= 0 && +m.y <= h))) err("A marker is outside the room.");
+      a.marks = marks.map(m => ({ k: m.k, x: Math.round(+m.x), y: Math.round(+m.y) }));
+      let n = 0; tabs.forEach(s => { const t = db.tables.find(z => z.id === s.id && z.area === a.name); if (t) { t.x = Math.round(+s.x); t.y = Math.round(+s.y); n++; } });
+      log("plan_saved", a.name + ": " + n + " table" + (n === 1 ? "" : "s") + ", " + a.marks.length + " markers"); save(); return n; },
     staff_push_subscribe(){ need(role()); return null; },
     staff_push_unsubscribe(){ need(role()); return null; },
     owner_delete_table({ p_id }){ need(isManager()); if (db.visits.some(v => v.table_id === p_id)) err("This table has bills on record. Switch it off instead.");
